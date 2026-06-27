@@ -37,15 +37,15 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // STATE
 // =====================================================================
 let state = {
-  session: null,
-  appUser: null,       // row from app_users
+  currentUser: null,   // { type: 'staff', role, username, id } OR { type: 'member', homeowner }
   homeowners: [],
   paymentTypes: [],
   payments: [],
   expenseCategories: [],
   expenses: [],
   view: 'login',
-  loading: true,
+  loginMode: 'staff',   // 'staff' or 'member'
+  loading: false,
   toast: null,
 };
 
@@ -76,92 +76,48 @@ function escapeHtml(s) {
 }
 
 // =====================================================================
-// AUTH
+// AUTH (simplified — no Supabase Auth sessions, just direct checks)
 // =====================================================================
-async function initAuth() {
-  const { data: { session } } = await sb.auth.getSession();
-  await handleSession(session);
-
-  sb.auth.onAuthStateChange(async (_event, session) => {
-    await handleSession(session);
-  });
-}
-
-async function handleSession(session) {
-  if (!session) {
-    setState({ session: null, appUser: null, view: 'login', loading: false });
+async function loginStaff(username, password) {
+  const { data, error } = await sb.rpc('verify_app_user', { p_username: username, p_password: password });
+  if (error) {
+    toast('Login error: ' + error.message, true);
     return;
   }
-
-  setState({ session, loading: true });
-
-  // Look up app_users row
-  let { data: appUserRow, error } = await sb
-    .from('app_users')
-    .select('*')
-    .eq('auth_user_id', session.user.id)
-    .maybeSingle();
-
-  if (!appUserRow) {
-    // First login for this auth user — check if their email matches a homeowner (self-register as member)
-    const email = session.user.email;
-    const { data: homeownerMatch } = await sb
-      .from('homeowners')
-      .select('*')
-      .eq('email', email)
-      .maybeSingle();
-
-    if (homeownerMatch) {
-      const { data: created, error: createErr } = await sb
-        .from('app_users')
-        .insert({ auth_user_id: session.user.id, email, role: 'member', homeowner_id: homeownerMatch.id })
-        .select()
-        .single();
-      if (createErr) {
-        console.error(createErr);
-        toast('Could not create your member account. Contact the HOA admin.', true);
-        await sb.auth.signOut();
-        setState({ loading: false });
-        return;
-      }
-      appUserRow = created;
-    } else {
-      toast('No homeowner record matches this email. Contact the HOA admin to be added.', true);
-      await sb.auth.signOut();
-      setState({ loading: false });
-      return;
-    }
+  if (!data || data.length === 0) {
+    toast('Incorrect username or password.', true);
+    return;
   }
-
-  setState({ appUser: appUserRow, loading: false, view: appUserRow.role === 'member' ? 'member-dashboard' : 'dashboard' });
+  const user = data[0];
+  setState({ currentUser: { type: 'staff', id: user.id, username: user.username, role: user.role }, view: 'dashboard' });
   await loadAllData();
 }
 
-async function loginWithMagicLink(email) {
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.href }
-  });
+async function loginMember(email) {
+  const { data, error } = await sb.from('homeowners').select('*').eq('email', email.trim()).maybeSingle();
   if (error) {
-    toast(error.message, true);
-    return false;
+    toast('Login error: ' + error.message, true);
+    return;
   }
-  return true;
+  if (!data) {
+    toast('No homeowner record found with that email. Contact the HOA admin.', true);
+    return;
+  }
+  setState({ currentUser: { type: 'member', homeowner: data }, view: 'member-dashboard' });
+  await loadAllData();
 }
 
-async function logout() {
-  await sb.auth.signOut();
-  setState({ session: null, appUser: null, view: 'login' });
+function logout() {
+  setState({ currentUser: null, view: 'login', homeowners: [], payments: [], expenses: [] });
 }
 
 // =====================================================================
 // DATA LOADING
 // =====================================================================
 async function loadAllData() {
-  const role = state.appUser?.role;
-  if (!role) return;
+  if (!state.currentUser) return;
 
-  if (role === 'super_admin' || role === 'admin') {
+  if (state.currentUser.type === 'staff') {
     const [hRes, ptRes, pRes, ecRes, eRes] = await Promise.all([
       sb.from('homeowners').select('*').order('block').order('lot'),
       sb.from('payment_types').select('*').order('sort_order'),
@@ -176,16 +132,16 @@ async function loadAllData() {
       expenseCategories: ecRes.data || [],
       expenses: eRes.data || [],
     });
-  } else if (role === 'member') {
-    const [ptRes, pRes, hRes] = await Promise.all([
+  } else if (state.currentUser.type === 'member') {
+    const homeownerId = state.currentUser.homeowner.id;
+    const [ptRes, pRes] = await Promise.all([
       sb.from('payment_types').select('*').order('sort_order'),
-      sb.from('payments').select('*, payment_types(name)').eq('homeowner_id', state.appUser.homeowner_id).order('payment_date', { ascending: false }),
-      sb.from('homeowners').select('*').eq('id', state.appUser.homeowner_id).maybeSingle(),
+      sb.from('payments').select('*, payment_types(name)').eq('homeowner_id', homeownerId).order('payment_date', { ascending: false }),
     ]);
     setState({
       paymentTypes: ptRes.data || [],
       payments: pRes.data || [],
-      homeowners: hRes.data ? [hRes.data] : [],
+      homeowners: [state.currentUser.homeowner],
     });
   }
 }
@@ -207,8 +163,8 @@ function render() {
   }
 
   let html = '';
-  if (state.view === 'login') html = renderLogin();
-  else if (state.appUser?.role === 'member') html = renderMemberDashboard();
+  if (!state.currentUser) html = renderLogin();
+  else if (state.currentUser.type === 'member') html = renderMemberDashboard();
   else html = renderStaffShell();
 
   root.innerHTML = `
@@ -222,6 +178,7 @@ function render() {
 // LOGIN VIEW
 // =====================================================================
 function renderLogin() {
+  const isStaff = state.loginMode === 'staff';
   return `
   <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 px-4">
     <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
@@ -230,17 +187,36 @@ function renderLogin() {
         <h1 class="text-xl font-bold text-slate-800">Maagay 1 Phase 1-B</h1>
         <p class="text-sm text-slate-500">Homeowners Association Inc.</p>
       </div>
+
+      <div class="flex bg-slate-100 rounded-lg p-1 mb-5 no-print">
+        <button id="mode-staff" class="flex-1 py-1.5 rounded-md text-sm font-medium transition ${isStaff ? 'bg-white shadow text-slate-800' : 'text-slate-500'}">Admin Login</button>
+        <button id="mode-member" class="flex-1 py-1.5 rounded-md text-sm font-medium transition ${!isStaff ? 'bg-white shadow text-slate-800' : 'text-slate-500'}">Member Login</button>
+      </div>
+
       <div id="login-msg" class="text-sm mb-3"></div>
-      <form id="login-form" class="space-y-3">
-        <input type="email" id="login-email" required placeholder="you@email.com"
-          class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition">
-          Send Magic Link
-        </button>
-      </form>
-      <p class="text-xs text-slate-400 mt-4 text-center">
-        Members: use the email on file with the HOA.<br>Admins: use your assigned login email.
-      </p>
+
+      ${isStaff ? `
+        <form id="staff-login-form" class="space-y-3">
+          <input type="text" id="staff-username" required placeholder="Username" autocomplete="username"
+            class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input type="password" id="staff-password" required placeholder="Password" autocomplete="current-password"
+            class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition">
+            Log In
+          </button>
+        </form>
+      ` : `
+        <form id="member-login-form" class="space-y-3">
+          <input type="email" id="member-email" required placeholder="you@email.com" autocomplete="email"
+            class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition">
+            View My Account
+          </button>
+        </form>
+        <p class="text-xs text-slate-400 mt-4 text-center">
+          Use the email address on file with the HOA.
+        </p>
+      `}
     </div>
   </div>`;
 }
@@ -298,7 +274,7 @@ function renderMemberDashboard() {
 // STAFF SHELL (Super Admin / Admin)
 // =====================================================================
 function renderStaffShell() {
-  const role = state.appUser.role;
+  const role = state.currentUser.role;
   const isSuper = role === 'super_admin';
   const tabs = [
     ['dashboard', 'Dashboard'],
@@ -323,7 +299,7 @@ function renderStaffShell() {
         `).join('')}
       </nav>
       <div class="p-4 border-t border-slate-700">
-        <p class="text-xs text-slate-500 mb-2 truncate">${escapeHtml(state.appUser.email)}</p>
+        <p class="text-xs text-slate-500 mb-2 truncate">${escapeHtml(state.currentUser.username)}</p>
         <button id="logout-btn" class="text-xs text-slate-400 hover:text-red-400">Log out</button>
       </div>
     </aside>
@@ -377,7 +353,7 @@ function renderOverview() {
 
 // ---------------- HOMEOWNERS ----------------
 function renderHomeowners() {
-  const isSuper = state.appUser.role === 'super_admin';
+  const isSuper = state.currentUser.role === 'super_admin';
   return `
   <div class="flex justify-between items-center mb-6 no-print">
     <h1 class="text-xl font-bold text-slate-800">Homeowners</h1>
@@ -435,7 +411,7 @@ function renderHomeowners() {
 
 // ---------------- PAYMENTS ----------------
 function renderPayments() {
-  const isSuper = state.appUser.role === 'super_admin';
+  const isSuper = state.currentUser.role === 'super_admin';
   return `
   <div class="flex justify-between items-center mb-6 no-print">
     <h1 class="text-xl font-bold text-slate-800">Payments</h1>
@@ -517,7 +493,7 @@ function renderPayments() {
 
 // ---------------- EXPENSES ----------------
 function renderExpenses() {
-  const isSuper = state.appUser.role === 'super_admin';
+  const isSuper = state.currentUser.role === 'super_admin';
   return `
   <div class="flex justify-between items-center mb-6 no-print">
     <h1 class="text-xl font-bold text-slate-800">Expenses</h1>
@@ -617,7 +593,7 @@ function renderReports() {
 
 // ---------------- EMAIL BLAST ----------------
 function renderEmailBlast() {
-  const isSuper = state.appUser.role === 'super_admin';
+  const isSuper = state.currentUser.role === 'super_admin';
   if (!isSuper) {
     return `<h1 class="text-xl font-bold text-slate-800 mb-6">Email Blast</h1><div class="bg-white rounded-xl shadow p-6 text-slate-500">Only Super Admin can send announcements.</div>`;
   }
@@ -646,20 +622,30 @@ function renderEmailBlast() {
 // EVENT HANDLERS
 // =====================================================================
 function attachHandlers() {
-  // ---- LOGIN ----
-  const loginForm = document.getElementById('login-form');
-  if (loginForm) {
-    loginForm.onsubmit = async (e) => {
+  // ---- LOGIN MODE TOGGLE ----
+  const modeStaff = document.getElementById('mode-staff');
+  if (modeStaff) modeStaff.onclick = () => setState({ loginMode: 'staff' });
+  const modeMember = document.getElementById('mode-member');
+  if (modeMember) modeMember.onclick = () => setState({ loginMode: 'member' });
+
+  // ---- STAFF LOGIN ----
+  const staffForm = document.getElementById('staff-login-form');
+  if (staffForm) {
+    staffForm.onsubmit = async (e) => {
       e.preventDefault();
-      const email = document.getElementById('login-email').value.trim();
-      const msgEl = document.getElementById('login-msg');
-      msgEl.textContent = 'Sending...';
-      msgEl.className = 'text-sm mb-3 text-slate-500';
-      const ok = await loginWithMagicLink(email);
-      if (ok) {
-        msgEl.textContent = 'Magic link sent! Check your email and click the link to log in.';
-        msgEl.className = 'text-sm mb-3 text-emerald-600';
-      }
+      const username = document.getElementById('staff-username').value.trim();
+      const password = document.getElementById('staff-password').value;
+      await loginStaff(username, password);
+    };
+  }
+
+  // ---- MEMBER LOGIN ----
+  const memberForm = document.getElementById('member-login-form');
+  if (memberForm) {
+    memberForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('member-email').value.trim();
+      await loginMember(email);
     };
   }
 
@@ -781,7 +767,7 @@ function attachHandlers() {
       if (id) {
         ({ error } = await sb.from('payments').update(payload).eq('id', id));
       } else {
-        payload.created_by = state.appUser.id;
+        payload.created_by = state.currentUser.id;
         ({ error } = await sb.from('payments').insert(payload));
       }
       if (error) {
@@ -878,7 +864,7 @@ function attachHandlers() {
       if (id) {
         ({ error } = await sb.from('expenses').update(payload).eq('id', id));
       } else {
-        payload.created_by = state.appUser.id;
+        payload.created_by = state.currentUser.id;
         ({ error } = await sb.from('expenses').insert(payload));
       }
       if (error) return toast(error.message, true);
@@ -916,12 +902,11 @@ function attachHandlers() {
       sendBtn.textContent = 'Sending...';
 
       try {
-        const { data: sessionData } = await sb.auth.getSession();
         const resp = await fetch(EDGE_FUNCTION_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session.access_token}`
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
           },
           body: JSON.stringify({ subject, body, recipients })
         });
@@ -929,7 +914,7 @@ function attachHandlers() {
         if (!resp.ok) throw new Error(result.error || 'Send failed');
 
         await sb.from('email_blasts').insert({
-          subject, body, recipient_count: recipients.length, sent_by: state.appUser.id
+          subject, body, recipient_count: recipients.length, sent_by: state.currentUser.id
         });
 
         toast(`Sent to ${recipients.length} homeowner(s)`);
@@ -1057,9 +1042,9 @@ function printExpenseReport(period) {
 }
 
 // =====================================================================
-// INIT
+// INIT — no session restore needed (no Supabase Auth), just show login
 // =====================================================================
-initAuth();
+render();
 </script>
 </body>
 </html>
