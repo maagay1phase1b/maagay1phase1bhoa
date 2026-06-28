@@ -56,6 +56,7 @@ let state = {
   toast: null,
   adminUsers: [],
   homeownerSort: { field: null, dir: 'asc' },
+  paymentFilter: { search: '', typeId: '' },
 };
 
 const root = document.getElementById('app');
@@ -714,20 +715,53 @@ function renderHomeowners() {
 // ---------------- PAYMENTS ----------------
 function renderPayments() {
   const isSuper = state.currentUser.role === 'super_admin';
+  const filter = state.paymentFilter;
+  const q = filter.search.trim().toLowerCase();
+
+  let rows = [...state.payments];
+  if (q) {
+    rows = rows.filter(p =>
+      (p.homeowners?.name||'').toLowerCase().includes(q) ||
+      (p.or_number||'').toLowerCase().includes(q) ||
+      (p.homeowners?.block||'').toLowerCase().includes(q) ||
+      (p.homeowners?.lot||'').toLowerCase().includes(q)
+    );
+  }
+  if (filter.typeId) {
+    rows = rows.filter(p => p.payment_type_id === filter.typeId);
+  }
+
   return `
-  <div class="flex justify-between items-center mb-6 no-print">
+  <div class="flex flex-wrap justify-between items-center gap-2 mb-4 no-print">
     <h1 class="text-xl font-bold text-slate-800">💵 Payments</h1>
     <div class="flex gap-2">
       ${isSuper ? `<button id="manage-types-btn" class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-2 rounded-lg font-medium">⚙️ Payment Types</button>
       <button id="add-payment-btn" class="text-sm text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-amber-200" style="background:linear-gradient(to right,#fbbf24,#f97316);">+ Log Payment</button>` : ''}
-      <button id="print-all-payments" class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Ledger</button>
+      <button id="print-ledger-btn" class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Ledger</button>
     </div>
   </div>
+
+  <div class="bg-white rounded-xl shadow card-pop p-4 mb-4 border border-amber-100 flex flex-wrap gap-3 items-end no-print">
+    <div class="flex-1 min-w-[200px]">
+      <label class="text-xs font-medium text-slate-600">Search</label>
+      <input type="text" id="payment-search" placeholder="Name, OR#, block, or lot..." value="${escapeHtml(filter.search)}"
+        class="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm mt-1">
+    </div>
+    <div class="min-w-[180px]">
+      <label class="text-xs font-medium text-slate-600">Payment Type</label>
+      <select id="payment-type-filter" class="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm mt-1">
+        <option value="">All Types</option>
+        ${state.paymentTypes.map(t=>`<option value="${t.id}" ${filter.typeId===t.id?'selected':''}>${escapeHtml(t.name)}</option>`).join('')}
+      </select>
+    </div>
+    ${(filter.search || filter.typeId) ? `<button id="payment-filter-clear" class="text-xs text-amber-700 hover:underline pb-2.5">Clear filters</button>` : ''}
+  </div>
+
   <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-amber-100">
     <table>
       <thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th><th class="no-print">Actions</th></tr></thead>
       <tbody>
-        ${state.payments.map(p=>`
+        ${rows.map(p=>`
           <tr class="${p.is_voided?'opacity-40 line-through':''}">
             <td>${fmtDate(p.payment_date)}</td>
             <td>${escapeHtml(p.homeowners?.name||'')}</td>
@@ -743,7 +777,7 @@ function renderPayments() {
               <button data-delete-payment="${p.id}" class="text-red-500 hover:underline text-xs">Delete</button>` : '<span class="text-xs text-slate-400">view only</span>'}
             </td>
           </tr>
-        `).join('') || `<tr><td colspan="9" class="text-center text-slate-400">No payments yet</td></tr>`}
+        `).join('') || `<tr><td colspan="9" class="text-center text-slate-400">No payments match your filters</td></tr>`}
       </tbody>
     </table>
   </div>
@@ -1306,8 +1340,41 @@ function attachHandlers() {
     };
   });
 
-  const printAllPay = document.getElementById('print-all-payments');
-  if (printAllPay) printAllPay.onclick = () => window.print();
+  // ---- PAYMENT SEARCH/FILTER ----
+  const paymentSearch = document.getElementById('payment-search');
+  if (paymentSearch) {
+    paymentSearch.oninput = () => {
+      setState({ paymentFilter: { ...state.paymentFilter, search: paymentSearch.value } });
+      document.getElementById('payment-search').focus();
+    };
+  }
+  const paymentTypeFilter = document.getElementById('payment-type-filter');
+  if (paymentTypeFilter) {
+    paymentTypeFilter.onchange = () => {
+      setState({ paymentFilter: { ...state.paymentFilter, typeId: paymentTypeFilter.value } });
+    };
+  }
+  const paymentFilterClear = document.getElementById('payment-filter-clear');
+  if (paymentFilterClear) {
+    paymentFilterClear.onclick = () => setState({ paymentFilter: { search: '', typeId: '' } });
+  }
+
+  // ---- PRINT LEDGER (date range) ----
+  const printLedgerBtn = document.getElementById('print-ledger-btn');
+  if (printLedgerBtn) printLedgerBtn.onclick = () => document.getElementById('ledger-modal').classList.remove('hidden');
+
+  const ledgerCancel = document.getElementById('ledger-cancel');
+  if (ledgerCancel) ledgerCancel.onclick = () => document.getElementById('ledger-modal').classList.add('hidden');
+
+  const ledgerGenerate = document.getElementById('ledger-generate');
+  if (ledgerGenerate) {
+    ledgerGenerate.onclick = () => {
+      const from = document.getElementById('ledger-from').value;
+      const to = document.getElementById('ledger-to').value;
+      document.getElementById('ledger-modal').classList.add('hidden');
+      printLedger(from, to);
+    };
+  }
 
   const payCancel = document.getElementById('pay-cancel');
   if (payCancel) payCancel.onclick = () => document.getElementById('payment-modal').classList.add('hidden');
@@ -1616,6 +1683,40 @@ function printMasterlist(includeDob, includeIncome) {
       <tbody>${rowsHtml}</tbody>
     </table>
     <p class="meta">Generated ${fmtDate(new Date())}</p>
+    </body></html>
+  `);
+  win.document.close();
+  setTimeout(() => win.print(), 300);
+}
+
+function printLedger(fromDate, toDate) {
+  let rows = [...state.payments];
+  if (fromDate) rows = rows.filter(p => p.payment_date >= fromDate);
+  if (toDate) rows = rows.filter(p => p.payment_date <= toDate);
+  rows.sort((a,b) => new Date(a.payment_date) - new Date(b.payment_date));
+
+  const total = rows.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+  const rangeLabel = fromDate || toDate
+    ? `${fromDate ? fmtDate(fromDate) : 'Beginning'} – ${toDate ? fmtDate(toDate) : 'Present'}`
+    : 'All Records';
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html><head><title>Payment Ledger</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:30px;color:#1e293b}
+      h1{font-size:18px;margin-bottom:0} h2{font-size:14px;color:#64748b;margin-top:4px}
+      table{width:100%;border-collapse:collapse;margin-top:16px}
+      th,td{border:1px solid #cbd5e1;padding:8px;font-size:12px;text-align:left}
+      th{background:#f1f5f9}
+      .total{margin-top:16px;font-size:15px;font-weight:bold}
+    </style></head><body>
+    <h1>Maagay 1 Phase 1-B Homeowners Association Inc.</h1>
+    <h2>Payment Ledger — ${rangeLabel}</h2>
+    <table><thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th></tr></thead>
+    <tbody>${rows.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${escapeHtml(p.homeowners?.name||'')}</td><td>${escapeHtml(p.homeowners?.block||'')}/${escapeHtml(p.homeowners?.lot||'')}</td><td>${escapeHtml(p.or_number)}</td><td>${escapeHtml(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${escapeHtml(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('') || `<tr><td colspan="8">No payments found in this range.</td></tr>`}</tbody></table>
+    <p class="total">Total (excluding voided): ${peso(total)}</p>
+    <p style="font-size:11px;color:#94a3b8;margin-top:30px">Generated ${fmtDate(new Date())}</p>
     </body></html>
   `);
   win.document.close();
