@@ -634,18 +634,32 @@ function renderHomeowners() {
     </table>
   </div>
 
-  <div id="homeowner-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 no-print">
-    <div class="bg-white rounded-xl p-6 w-full max-w-md">
+  <div id="homeowner-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 no-print p-4">
+    <div class="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
       <h3 class="font-bold text-lg mb-4" id="ho-modal-title">Add Homeowner</h3>
       <form id="homeowner-form" class="space-y-3">
         <input type="hidden" id="ho-id">
+        <div class="grid grid-cols-3 gap-2">
+          <input placeholder="First Name" id="ho-first-name" class="border rounded-lg px-3 py-2 text-sm">
+          <input placeholder="Middle Name" id="ho-middle-name" class="border rounded-lg px-3 py-2 text-sm">
+          <input placeholder="Last Name" id="ho-last-name" class="border rounded-lg px-3 py-2 text-sm">
+        </div>
+        <p class="text-xs text-slate-400">Full name is auto-built from the names above, or you can type it directly:</p>
         <input required placeholder="Full Name" id="ho-name" class="w-full border rounded-lg px-3 py-2 text-sm">
         <div class="grid grid-cols-2 gap-2">
           <input placeholder="Block" id="ho-block" class="border rounded-lg px-3 py-2 text-sm">
           <input placeholder="Lot" id="ho-lot" class="border rounded-lg px-3 py-2 text-sm">
         </div>
         <input placeholder="Area (sqm)" id="ho-area" type="number" step="0.01" class="w-full border rounded-lg px-3 py-2 text-sm">
-        <input required placeholder="Email" id="ho-email" type="email" class="w-full border rounded-lg px-3 py-2 text-sm">
+        <div>
+          <label class="text-xs font-medium text-slate-600">Date of Birth</label>
+          <input id="ho-dob" type="date" class="w-full border rounded-lg px-3 py-2 text-sm mt-1">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-600">Monthly Income (optional)</label>
+          <input id="ho-income" type="number" step="0.01" placeholder="e.g. 25000" class="w-full border rounded-lg px-3 py-2 text-sm mt-1">
+        </div>
+        <input placeholder="Email" id="ho-email" type="email" class="w-full border rounded-lg px-3 py-2 text-sm">
         <select id="ho-status" class="w-full border rounded-lg px-3 py-2 text-sm">
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
@@ -1125,15 +1139,37 @@ function attachHandlers() {
 
   const hoForm = document.getElementById('homeowner-form');
   if (hoForm) {
+    // Auto-build full name from first/middle/last if those are filled and full name is empty
+    const autoFillName = () => {
+      const first = document.getElementById('ho-first-name').value.trim();
+      const middle = document.getElementById('ho-middle-name').value.trim();
+      const last = document.getElementById('ho-last-name').value.trim();
+      const nameField = document.getElementById('ho-name');
+      if ((first || last) && !nameField.dataset.userEdited) {
+        nameField.value = [first, middle, last].filter(Boolean).join(' ');
+      }
+    };
+    ['ho-first-name','ho-middle-name','ho-last-name'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = autoFillName;
+    });
+    const nameField = document.getElementById('ho-name');
+    if (nameField) nameField.oninput = () => { nameField.dataset.userEdited = 'true'; };
+
     hoForm.onsubmit = async (e) => {
       e.preventDefault();
       const id = document.getElementById('ho-id').value;
       const payload = {
         name: document.getElementById('ho-name').value.trim(),
+        first_name: document.getElementById('ho-first-name').value.trim() || null,
+        middle_name: document.getElementById('ho-middle-name').value.trim() || null,
+        last_name: document.getElementById('ho-last-name').value.trim() || null,
         block: document.getElementById('ho-block').value.trim(),
         lot: document.getElementById('ho-lot').value.trim(),
         area: parseFloat(document.getElementById('ho-area').value) || null,
-        email: document.getElementById('ho-email').value.trim(),
+        date_of_birth: document.getElementById('ho-dob').value || null,
+        monthly_income: parseFloat(document.getElementById('ho-income').value) || null,
+        email: document.getElementById('ho-email').value.trim() || null,
         status: document.getElementById('ho-status').value,
         notes: document.getElementById('ho-notes').value.trim(),
       };
@@ -1377,10 +1413,15 @@ function openHomeownerModal(ho) {
   const modal = document.getElementById('homeowner-modal');
   document.getElementById('ho-modal-title').textContent = ho ? 'Edit Homeowner' : 'Add Homeowner';
   document.getElementById('ho-id').value = ho?.id || '';
+  document.getElementById('ho-first-name').value = ho?.first_name || '';
+  document.getElementById('ho-middle-name').value = ho?.middle_name || '';
+  document.getElementById('ho-last-name').value = ho?.last_name || '';
   document.getElementById('ho-name').value = ho?.name || '';
   document.getElementById('ho-block').value = ho?.block || '';
   document.getElementById('ho-lot').value = ho?.lot || '';
   document.getElementById('ho-area').value = ho?.area || '';
+  document.getElementById('ho-dob').value = ho?.date_of_birth || '';
+  document.getElementById('ho-income').value = ho?.monthly_income || '';
   document.getElementById('ho-email').value = ho?.email || '';
   document.getElementById('ho-status').value = ho?.status || 'active';
   document.getElementById('ho-notes').value = ho?.notes || '';
@@ -1435,7 +1476,7 @@ function printHomeownerStatement(homeownerId) {
     </style></head><body>
     <h1>Maagay 1 Phase 1-B Homeowners Association Inc.</h1>
     <h2>Statement of Account</h2>
-    <p><b>${escapeHtml(ho.name)}</b><br>Block ${escapeHtml(ho.block||'-')}, Lot ${escapeHtml(ho.lot||'-')} &middot; ${escapeHtml(ho.area||'-')} sqm<br>${escapeHtml(ho.email)}</p>
+    <p><b>${escapeHtml(ho.name)}</b><br>Block ${escapeHtml(ho.block||'-')}, Lot ${escapeHtml(ho.lot||'-')} &middot; ${escapeHtml(ho.area||'-')} sqm<br>${escapeHtml(ho.email||'No email on file')}${ho.date_of_birth ? `<br>Date of Birth: ${fmtDate(ho.date_of_birth)}` : ''}</p>
     <table><thead><tr><th>Date</th><th>OR #</th><th>Payment Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th></tr></thead>
     <tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${escapeHtml(p.or_number)}</td><td>${escapeHtml(p.payment_types?.name||'')}</td><td>${fmtPeriod(p) || '—'}</td><td>${peso(p.amount)}</td><td>${escapeHtml(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')}</tbody></table>
     <p class="total">Total Paid: ${peso(total)}</p>
