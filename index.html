@@ -57,6 +57,7 @@ let state = {
   adminUsers: [],
   homeownerSort: { field: null, dir: 'asc' },
   paymentFilter: { search: '', typeId: '' },
+  paymentSort: { field: null, dir: 'asc' },
 };
 
 const root = document.getElementById('app');
@@ -731,6 +732,22 @@ function renderPayments() {
     rows = rows.filter(p => p.payment_type_id === filter.typeId);
   }
 
+  const sort = state.paymentSort;
+  if (sort.field) {
+    rows.sort((a, b) => {
+      let av, bv;
+      if (sort.field === 'date') { av = new Date(a.payment_date); bv = new Date(b.payment_date); }
+      else { av = (a.or_number||'').toLowerCase(); bv = (b.or_number||'').toLowerCase(); }
+      if (av < bv) return sort.dir === 'asc' ? -1 : 1;
+      if (av > bv) return sort.dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+  const payArrow = (field) => {
+    if (sort.field !== field) return `<span class="text-slate-300 ml-1">⇕</span>`;
+    return sort.dir === 'asc' ? `<span class="text-amber-600 ml-1">↑</span>` : `<span class="text-amber-600 ml-1">↓</span>`;
+  };
+
   return `
   <div class="flex flex-wrap justify-between items-center gap-2 mb-4 no-print">
     <h1 class="text-xl font-bold text-slate-800">💵 Payments</h1>
@@ -759,7 +776,12 @@ function renderPayments() {
 
   <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-amber-100">
     <table>
-      <thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th><th class="no-print">Actions</th></tr></thead>
+      <thead><tr>
+        <th><button data-pay-sort="date" class="no-print flex items-center hover:text-amber-600">Date${payArrow('date')}</button><span class="print-only">Date</span></th>
+        <th>Homeowner</th><th>Blk/Lot</th>
+        <th><button data-pay-sort="or" class="no-print flex items-center hover:text-amber-600">OR #${payArrow('or')}</button><span class="print-only">OR #</span></th>
+        <th>Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th><th class="no-print">Actions</th>
+      </tr></thead>
       <tbody>
         ${rows.map(p=>`
           <tr class="${p.is_voided?'opacity-40 line-through':''}">
@@ -798,8 +820,8 @@ function renderPayments() {
           <option value="">Select Payment Type</option>
           ${state.paymentTypes.filter(t=>t.is_active).map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
         </select>
-        <input required placeholder="OR Number" id="pay-or" class="w-full border rounded-lg px-3 py-2 text-sm">
-        <input required placeholder="Amount" id="pay-amount" type="number" step="0.01" class="w-full border rounded-lg px-3 py-2 text-sm">
+        <input required placeholder="OR Number" id="pay-or" minlength="1" class="w-full border rounded-lg px-3 py-2 text-sm">
+        <input required placeholder="Amount" id="pay-amount" type="number" step="0.01" min="0.01" class="w-full border rounded-lg px-3 py-2 text-sm">
         <input required id="pay-date" type="date" class="w-full border rounded-lg px-3 py-2 text-sm">
         <div>
           <label class="text-xs font-medium text-slate-600">Covers Period (optional — e.g. Monthly Dues for several months)</label>
@@ -828,6 +850,10 @@ function renderPayments() {
             <button data-save-type="${t.id}" class="text-xs text-blue-600 hover:underline">Save</button>
           </div>
         `).join('')}
+      </div>
+      <div class="flex gap-2 mb-4">
+        <input id="new-type-name" placeholder="New payment type name" class="flex-1 border rounded-lg px-3 py-2 text-sm">
+        <button id="add-type-btn" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm">Add</button>
       </div>
       <div class="flex gap-2 mb-4">
         <input id="new-type-name" placeholder="New payment type name" class="flex-1 border rounded-lg px-3 py-2 text-sm">
@@ -1340,12 +1366,28 @@ function attachHandlers() {
     };
   });
 
+  // ---- PAYMENT SORT ----
+  document.querySelectorAll('[data-pay-sort]').forEach(btn => {
+    btn.onclick = () => {
+      const field = btn.dataset.paySort;
+      const current = state.paymentSort;
+      let dir = 'asc';
+      if (current.field === field) dir = current.dir === 'asc' ? 'desc' : 'asc';
+      setState({ paymentSort: { field, dir } });
+    };
+  });
+
   // ---- PAYMENT SEARCH/FILTER ----
   const paymentSearch = document.getElementById('payment-search');
   if (paymentSearch) {
     paymentSearch.oninput = () => {
+      const cursorPos = paymentSearch.selectionStart;
       setState({ paymentFilter: { ...state.paymentFilter, search: paymentSearch.value } });
-      document.getElementById('payment-search').focus();
+      const refreshed = document.getElementById('payment-search');
+      if (refreshed) {
+        refreshed.focus();
+        refreshed.setSelectionRange(cursorPos, cursorPos);
+      }
     };
   }
   const paymentTypeFilter = document.getElementById('payment-type-filter');
@@ -1361,7 +1403,12 @@ function attachHandlers() {
 
   // ---- PRINT LEDGER (date range) ----
   const printLedgerBtn = document.getElementById('print-ledger-btn');
-  if (printLedgerBtn) printLedgerBtn.onclick = () => document.getElementById('ledger-modal').classList.remove('hidden');
+  if (printLedgerBtn) {
+    printLedgerBtn.onclick = () => {
+      const modal = document.getElementById('ledger-modal');
+      if (modal) modal.classList.remove('hidden');
+    };
+  }
 
   const ledgerCancel = document.getElementById('ledger-cancel');
   if (ledgerCancel) ledgerCancel.onclick = () => document.getElementById('ledger-modal').classList.add('hidden');
@@ -1389,13 +1436,23 @@ function attachHandlers() {
         return;
       }
       const id = document.getElementById('pay-id').value;
+      const orNumber = document.getElementById('pay-or').value.trim();
+      const amountVal = parseFloat(document.getElementById('pay-amount').value);
+      if (!orNumber) {
+        toast('OR# is required.', true);
+        return;
+      }
+      if (!amountVal || amountVal <= 0) {
+        toast('Amount is required and must be greater than 0.', true);
+        return;
+      }
       const periodFromVal = document.getElementById('pay-period-from').value;
       const periodToVal = document.getElementById('pay-period-to').value;
       const payload = {
         homeowner_id: homeownerId,
         payment_type_id: document.getElementById('pay-type').value,
-        or_number: document.getElementById('pay-or').value.trim(),
-        amount: parseFloat(document.getElementById('pay-amount').value),
+        or_number: orNumber,
+        amount: amountVal,
         payment_date: document.getElementById('pay-date').value,
         period_from: periodFromVal ? periodFromVal + '-01' : null,
         period_to: periodToVal ? periodToVal + '-01' : null,
