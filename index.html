@@ -753,10 +753,13 @@ function renderPayments() {
       <h3 class="font-bold text-lg mb-4" id="pay-modal-title">Log Payment</h3>
       <form id="payment-form" class="space-y-3">
         <input type="hidden" id="pay-id">
-        <select required id="pay-homeowner" class="w-full border rounded-lg px-3 py-2 text-sm">
-          <option value="">Select Homeowner</option>
-          ${state.homeowners.map(h=>`<option value="${h.id}">${escapeHtml(h.name)} (Blk ${escapeHtml(h.block||'-')} Lot ${escapeHtml(h.lot||'-')})</option>`).join('')}
-        </select>
+        <div class="relative">
+          <label class="text-xs font-medium text-slate-600">Homeowner</label>
+          <input type="text" id="pay-homeowner-search" required placeholder="Type to search by name..." autocomplete="off"
+            class="w-full border rounded-lg px-3 py-2 text-sm mt-1">
+          <input type="hidden" id="pay-homeowner">
+          <div id="pay-homeowner-results" class="hidden absolute z-10 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 w-full max-h-48 overflow-y-auto"></div>
+        </div>
         <select required id="pay-type" class="w-full border rounded-lg px-3 py-2 text-sm">
           <option value="">Select Payment Type</option>
           ${state.paymentTypes.filter(t=>t.is_active).map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
@@ -1241,6 +1244,42 @@ function attachHandlers() {
   const addPayBtn = document.getElementById('add-payment-btn');
   if (addPayBtn) addPayBtn.onclick = () => openPaymentModal();
 
+  // Homeowner search/autocomplete inside Log Payment modal
+  const payHoSearch = document.getElementById('pay-homeowner-search');
+  if (payHoSearch) {
+    const resultsBox = document.getElementById('pay-homeowner-results');
+    payHoSearch.oninput = () => {
+      const q = payHoSearch.value.trim().toLowerCase();
+      document.getElementById('pay-homeowner').value = '';
+      if (!q) { resultsBox.classList.add('hidden'); resultsBox.innerHTML = ''; return; }
+      const matches = state.homeowners.filter(h => (h.name||'').toLowerCase().includes(q)).slice(0, 20);
+      if (matches.length === 0) {
+        resultsBox.innerHTML = `<div class="px-3 py-2 text-sm text-slate-400">No matches found.</div>`;
+      } else {
+        resultsBox.innerHTML = matches.map(h => `
+          <button type="button" data-pick-homeowner="${h.id}" class="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 block">
+            ${escapeHtml(h.name)} <span class="text-xs text-slate-400">(Blk ${escapeHtml(h.block||'-')} Lot ${escapeHtml(h.lot||'-')})</span>
+          </button>
+        `).join('');
+        resultsBox.querySelectorAll('[data-pick-homeowner]').forEach(btn => {
+          btn.onclick = () => {
+            const ho = state.homeowners.find(h => h.id === btn.dataset.pickHomeowner);
+            document.getElementById('pay-homeowner').value = ho.id;
+            payHoSearch.value = `${ho.name} (Blk ${ho.block||'-'} Lot ${ho.lot||'-'})`;
+            resultsBox.classList.add('hidden');
+          };
+        });
+      }
+      resultsBox.classList.remove('hidden');
+    };
+    payHoSearch.onfocus = () => { if (payHoSearch.value.trim()) payHoSearch.oninput(); };
+    document.addEventListener('click', (e) => {
+      if (!payHoSearch.contains(e.target) && !resultsBox.contains(e.target)) {
+        resultsBox.classList.add('hidden');
+      }
+    });
+  }
+
   document.querySelectorAll('[data-edit-payment]').forEach(btn => {
     btn.onclick = () => openPaymentModal(state.payments.find(p => p.id === btn.dataset.editPayment));
   });
@@ -1277,11 +1316,16 @@ function attachHandlers() {
   if (payForm) {
     payForm.onsubmit = async (e) => {
       e.preventDefault();
+      const homeownerId = document.getElementById('pay-homeowner').value;
+      if (!homeownerId) {
+        toast('Please pick a homeowner from the search results.', true);
+        return;
+      }
       const id = document.getElementById('pay-id').value;
       const periodFromVal = document.getElementById('pay-period-from').value;
       const periodToVal = document.getElementById('pay-period-to').value;
       const payload = {
-        homeowner_id: document.getElementById('pay-homeowner').value,
+        homeowner_id: homeownerId,
         payment_type_id: document.getElementById('pay-type').value,
         or_number: document.getElementById('pay-or').value.trim(),
         amount: parseFloat(document.getElementById('pay-amount').value),
@@ -1483,6 +1527,13 @@ function openPaymentModal(p) {
   document.getElementById('pay-modal-title').textContent = p ? 'Edit Payment' : 'Log Payment';
   document.getElementById('pay-id').value = p?.id || '';
   document.getElementById('pay-homeowner').value = p?.homeowner_id || '';
+  if (p?.homeowner_id) {
+    const ho = state.homeowners.find(h => h.id === p.homeowner_id);
+    document.getElementById('pay-homeowner-search').value = ho ? `${ho.name} (Blk ${ho.block||'-'} Lot ${ho.lot||'-'})` : '';
+  } else {
+    document.getElementById('pay-homeowner-search').value = '';
+  }
+  document.getElementById('pay-homeowner-results').classList.add('hidden');
   document.getElementById('pay-type').value = p?.payment_type_id || '';
   document.getElementById('pay-or').value = p?.or_number || '';
   document.getElementById('pay-amount').value = p?.amount || '';
