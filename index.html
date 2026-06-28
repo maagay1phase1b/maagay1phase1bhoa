@@ -12,14 +12,20 @@
     .no-print { display: none !important; }
     body { background: white !important; }
   }
-  .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
+  .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #16a34a; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; font-size: 13px; }
-  th { background: #f8fafc; font-weight: 600; }
+  th { background: #f0fdf4; font-weight: 600; }
+  .app-bg { background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 40%, #e7f7ee 100%); }
+  .tab-btn { transition: all 0.15s ease; border-left: 3px solid transparent; }
+  .tab-btn:hover { background: rgba(255,255,255,0.08); }
+  .tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 10px; flex-shrink: 0; }
+  .card-pop { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .card-pop:hover { transform: translateY(-2px); box-shadow: 0 8px 20px -4px rgba(0,0,0,0.08); }
 </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="app-bg min-h-screen">
 
 <div id="app" class="min-h-screen"></div>
 
@@ -180,17 +186,17 @@ function render() {
 function renderLogin() {
   const isStaff = state.loginMode === 'staff';
   return `
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 px-4">
-    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+  <div class="min-h-screen flex items-center justify-center app-bg px-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md border border-emerald-100">
       <div class="text-center mb-6">
-        <div class="w-14 h-14 bg-blue-600 rounded-xl mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold">M1</div>
+        <div class="w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-emerald-200">🏡</div>
         <h1 class="text-xl font-bold text-slate-800">Maagay 1 Phase 1-B</h1>
-        <p class="text-sm text-slate-500">Homeowners Association Inc.</p>
+        <p class="text-sm text-emerald-600">Homeowners Association Inc.</p>
       </div>
 
-      <div class="flex bg-slate-100 rounded-lg p-1 mb-5 no-print">
-        <button id="mode-staff" class="flex-1 py-1.5 rounded-md text-sm font-medium transition ${isStaff ? 'bg-white shadow text-slate-800' : 'text-slate-500'}">Admin Login</button>
-        <button id="mode-member" class="flex-1 py-1.5 rounded-md text-sm font-medium transition ${!isStaff ? 'bg-white shadow text-slate-800' : 'text-slate-500'}">Member Login</button>
+      <div class="flex bg-emerald-50 rounded-lg p-1 mb-5 no-print">
+        <button id="mode-staff" class="flex-1 py-1.5 rounded-md text-sm font-medium transition ${isStaff ? 'bg-white shadow text-emerald-700' : 'text-emerald-500'}">🔑 Admin Login</button>
+        <button id="mode-member" class="flex-1 py-1.5 rounded-md text-sm font-medium transition ${!isStaff ? 'bg-white shadow text-emerald-700' : 'text-emerald-500'}">🏠 Member Login</button>
       </div>
 
       <div id="login-msg" class="text-sm mb-3"></div>
@@ -198,18 +204,18 @@ function renderLogin() {
       ${isStaff ? `
         <form id="staff-login-form" class="space-y-3">
           <input type="text" id="staff-username" required placeholder="Username" autocomplete="username"
-            class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            class="w-full border border-emerald-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
           <input type="password" id="staff-password" required placeholder="Password" autocomplete="current-password"
-            class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition">
+            class="w-full border border-emerald-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+          <button type="submit" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-medium py-2.5 rounded-lg text-sm transition shadow-md shadow-emerald-200">
             Log In
           </button>
         </form>
       ` : `
         <form id="member-login-form" class="space-y-3">
           <input type="email" id="member-email" required placeholder="you@email.com" autocomplete="email"
-            class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition">
+            class="w-full border border-emerald-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+          <button type="submit" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-medium py-2.5 rounded-lg text-sm transition shadow-md shadow-emerald-200">
             View My Account
           </button>
         </form>
@@ -231,26 +237,26 @@ function renderMemberDashboard() {
   <div class="max-w-3xl mx-auto p-4 md:p-8">
     <div class="flex justify-between items-center mb-6 no-print">
       <div>
-        <h1 class="text-lg font-bold text-slate-800">My Account</h1>
-        <p class="text-xs text-slate-500">Maagay 1 Phase 1-B HOA</p>
+        <h1 class="text-lg font-bold text-slate-800">🏡 My Account</h1>
+        <p class="text-xs text-emerald-600">Maagay 1 Phase 1-B HOA</p>
       </div>
-      <button id="logout-btn" class="text-sm text-slate-500 hover:text-red-600">Log out</button>
+      <button id="logout-btn" class="text-sm text-rose-500 hover:text-rose-700 font-medium">Log out</button>
     </div>
 
     ${ho ? `
-    <div class="bg-white rounded-xl shadow p-6 mb-6 print-area">
-      <h2 class="font-bold text-lg mb-1">${escapeHtml(ho.name)}</h2>
+    <div class="bg-white rounded-xl shadow card-pop p-6 mb-6 print-area border border-emerald-100">
+      <h2 class="font-bold text-lg mb-1 text-slate-800">${escapeHtml(ho.name)}</h2>
       <p class="text-sm text-slate-500 mb-4">Block ${escapeHtml(ho.block||'-')}, Lot ${escapeHtml(ho.lot||'-')} &middot; ${escapeHtml(ho.area||'-')} sqm &middot; ${escapeHtml(ho.email)}</p>
-      <div class="bg-blue-50 rounded-lg p-4 inline-block">
-        <p class="text-xs text-blue-600 uppercase font-semibold">Total Paid To Date</p>
-        <p class="text-2xl font-bold text-blue-800">${peso(bal)}</p>
+      <div class="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-4 inline-block border border-emerald-100">
+        <p class="text-xs text-emerald-600 uppercase font-semibold">💰 Total Paid To Date</p>
+        <p class="text-2xl font-bold text-emerald-700">${peso(bal)}</p>
       </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow p-6">
+    <div class="bg-white rounded-xl shadow card-pop p-6 border border-emerald-100">
       <div class="flex justify-between items-center mb-4 no-print">
-        <h3 class="font-semibold text-slate-700">Payment History</h3>
-        <button id="print-member-history" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg">Print / Save PDF</button>
+        <h3 class="font-semibold text-slate-700">📋 Payment History</h3>
+        <button id="print-member-history" class="text-sm bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg font-medium">Print / Save PDF</button>
       </div>
       <table>
         <thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Amount</th><th>Remarks</th></tr></thead>
@@ -277,33 +283,36 @@ function renderStaffShell() {
   const role = state.currentUser.role;
   const isSuper = role === 'super_admin';
   const tabs = [
-    ['dashboard', 'Dashboard'],
-    ['homeowners', 'Homeowners'],
-    ['payments', 'Payments'],
-    ['expenses', 'Expenses'],
-    ['reports', 'Reports'],
-    ['email', 'Email Blast'],
+    ['dashboard', 'Dashboard', '📊', '#34d399'],
+    ['homeowners', 'Homeowners', '🏠', '#60a5fa'],
+    ['payments', 'Payments', '💵', '#fbbf24'],
+    ['expenses', 'Expenses', '🧾', '#fb7185'],
+    ['reports', 'Reports', '📈', '#a78bfa'],
+    ['email', 'Email Blast', '✉️', '#22d3ee'],
   ];
   const active = state.view;
 
   return `
   <div class="flex h-screen overflow-hidden">
-    <aside class="w-56 bg-slate-900 text-slate-300 flex flex-col no-print">
-      <div class="p-5 border-b border-slate-700">
-        <p class="font-bold text-white text-sm leading-tight">Maagay 1 Phase 1-B</p>
-        <p class="text-xs text-slate-500">${isSuper ? 'Super Admin' : 'Admin (view only)'}</p>
+    <aside class="w-60 bg-gradient-to-b from-emerald-900 via-emerald-800 to-teal-900 text-emerald-100 flex flex-col no-print">
+      <div class="p-5 border-b border-emerald-700/50">
+        <p class="font-bold text-white text-sm leading-tight">🏡 Maagay 1 Phase 1-B</p>
+        <p class="text-xs text-emerald-300 mt-0.5">${isSuper ? '🔑 Super Admin' : '👁️ Admin (view only)'}</p>
       </div>
       <nav class="flex-1 py-3">
-        ${tabs.map(([key,label]) => `
-          <button data-nav="${key}" class="w-full text-left px-5 py-2.5 text-sm hover:bg-slate-800 transition ${active===key ? 'bg-slate-800 text-white border-r-2 border-blue-500' : ''}">${label}</button>
+        ${tabs.map(([key,label,icon,color]) => `
+          <button data-nav="${key}" class="tab-btn w-full text-left px-5 py-2.5 text-sm flex items-center ${active===key ? 'bg-white/10 text-white' : 'text-emerald-200'}" style="border-left-color: ${active===key ? color : 'transparent'}">
+            <span class="tab-icon rounded-lg" style="background:${active===key ? color+'33' : 'transparent'}">${icon}</span>
+            ${label}
+          </button>
         `).join('')}
       </nav>
-      <div class="p-4 border-t border-slate-700">
-        <p class="text-xs text-slate-500 mb-2 truncate">${escapeHtml(state.currentUser.username)}</p>
-        <button id="logout-btn" class="text-xs text-slate-400 hover:text-red-400">Log out</button>
+      <div class="p-4 border-t border-emerald-700/50">
+        <p class="text-xs text-emerald-300 mb-2 truncate">👤 ${escapeHtml(state.currentUser.username)}</p>
+        <button id="logout-btn" class="text-xs text-rose-300 hover:text-rose-200 font-medium">Log out</button>
       </div>
     </aside>
-    <main class="flex-1 overflow-y-auto bg-slate-50">
+    <main class="flex-1 overflow-y-auto app-bg">
       <div class="p-4 md:p-8">
         ${renderStaffView()}
       </div>
@@ -331,15 +340,15 @@ function renderOverview() {
   const activeMembers = state.homeowners.filter(h=>h.status==='active').length;
 
   return `
-  <h1 class="text-xl font-bold text-slate-800 mb-6">Dashboard</h1>
+  <h1 class="text-xl font-bold text-slate-800 mb-6">📊 Dashboard</h1>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-    <div class="bg-white rounded-xl shadow p-5"><p class="text-xs text-slate-500 mb-1">Active Homeowners</p><p class="text-2xl font-bold text-slate-800">${activeMembers}</p></div>
-    <div class="bg-white rounded-xl shadow p-5"><p class="text-xs text-slate-500 mb-1">Total Collected</p><p class="text-2xl font-bold text-emerald-600">${peso(totalIncome)}</p></div>
-    <div class="bg-white rounded-xl shadow p-5"><p class="text-xs text-slate-500 mb-1">Total Expenses</p><p class="text-2xl font-bold text-red-600">${peso(totalExpense)}</p></div>
-    <div class="bg-white rounded-xl shadow p-5"><p class="text-xs text-slate-500 mb-1">Net Balance</p><p class="text-2xl font-bold ${balance>=0?'text-blue-700':'text-red-700'}">${peso(balance)}</p></div>
+    <div class="bg-white rounded-xl shadow card-pop p-5 border-l-4 border-blue-400"><p class="text-xs text-slate-500 mb-1">🏠 Active Homeowners</p><p class="text-2xl font-bold text-blue-600">${activeMembers}</p></div>
+    <div class="bg-white rounded-xl shadow card-pop p-5 border-l-4 border-emerald-400"><p class="text-xs text-slate-500 mb-1">💰 Total Collected</p><p class="text-2xl font-bold text-emerald-600">${peso(totalIncome)}</p></div>
+    <div class="bg-white rounded-xl shadow card-pop p-5 border-l-4 border-rose-400"><p class="text-xs text-slate-500 mb-1">🧾 Total Expenses</p><p class="text-2xl font-bold text-rose-500">${peso(totalExpense)}</p></div>
+    <div class="bg-white rounded-xl shadow card-pop p-5 border-l-4 border-violet-400"><p class="text-xs text-slate-500 mb-1">📈 Net Balance</p><p class="text-2xl font-bold ${balance>=0?'text-violet-600':'text-rose-600'}">${peso(balance)}</p></div>
   </div>
-  <div class="bg-white rounded-xl shadow p-5">
-    <h3 class="font-semibold text-slate-700 mb-3">Recent Payments</h3>
+  <div class="bg-white rounded-xl shadow card-pop p-5 border border-emerald-100">
+    <h3 class="font-semibold text-slate-700 mb-3">💵 Recent Payments</h3>
     <table>
       <thead><tr><th>Date</th><th>Homeowner</th><th>OR #</th><th>Type</th><th>Amount</th></tr></thead>
       <tbody>
@@ -356,13 +365,13 @@ function renderHomeowners() {
   const isSuper = state.currentUser.role === 'super_admin';
   return `
   <div class="flex justify-between items-center mb-6 no-print">
-    <h1 class="text-xl font-bold text-slate-800">Homeowners</h1>
+    <h1 class="text-xl font-bold text-slate-800">🏠 Homeowners</h1>
     <div class="flex gap-2">
-      <button id="print-all-homeowners" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg">Print Directory</button>
-      ${isSuper ? `<button id="add-homeowner-btn" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg">+ Add Homeowner</button>` : ''}
+      <button id="print-all-homeowners" class="text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Directory</button>
+      ${isSuper ? `<button id="add-homeowner-btn" class="text-sm bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-blue-200">+ Add Homeowner</button>` : ''}
     </div>
   </div>
-  <div class="bg-white rounded-xl shadow overflow-x-auto">
+  <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-blue-100">
     <table>
       <thead><tr><th>Name</th><th>Block</th><th>Lot</th><th>Area</th><th>Email</th><th>Status</th><th>Balance</th><th class="no-print">Actions</th></tr></thead>
       <tbody>
@@ -414,14 +423,14 @@ function renderPayments() {
   const isSuper = state.currentUser.role === 'super_admin';
   return `
   <div class="flex justify-between items-center mb-6 no-print">
-    <h1 class="text-xl font-bold text-slate-800">Payments</h1>
+    <h1 class="text-xl font-bold text-slate-800">💵 Payments</h1>
     <div class="flex gap-2">
-      ${isSuper ? `<button id="manage-types-btn" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg">Payment Types</button>
-      <button id="add-payment-btn" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg">+ Log Payment</button>` : ''}
-      <button id="print-all-payments" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg">Print Ledger</button>
+      ${isSuper ? `<button id="manage-types-btn" class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-2 rounded-lg font-medium">⚙️ Payment Types</button>
+      <button id="add-payment-btn" class="text-sm bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-amber-200">+ Log Payment</button>` : ''}
+      <button id="print-all-payments" class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Ledger</button>
     </div>
   </div>
-  <div class="bg-white rounded-xl shadow overflow-x-auto">
+  <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-amber-100">
     <table>
       <thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Type</th><th>Amount</th><th>Remarks</th><th class="no-print">Actions</th></tr></thead>
       <tbody>
@@ -496,14 +505,14 @@ function renderExpenses() {
   const isSuper = state.currentUser.role === 'super_admin';
   return `
   <div class="flex justify-between items-center mb-6 no-print">
-    <h1 class="text-xl font-bold text-slate-800">Expenses</h1>
+    <h1 class="text-xl font-bold text-slate-800">🧾 Expenses</h1>
     <div class="flex gap-2">
-      ${isSuper ? `<button id="add-expense-btn" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg">+ Add Expense</button>` : ''}
-      <button id="print-monthly-expenses" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg">Print Monthly</button>
-      <button id="print-yearly-expenses" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg">Print Yearly</button>
+      ${isSuper ? `<button id="add-expense-btn" class="text-sm bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-rose-200">+ Add Expense</button>` : ''}
+      <button id="print-monthly-expenses" class="text-sm bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Monthly</button>
+      <button id="print-yearly-expenses" class="text-sm bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Yearly</button>
     </div>
   </div>
-  <div class="bg-white rounded-xl shadow overflow-x-auto">
+  <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-rose-100">
     <table>
       <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Receipt Ref</th><th class="no-print">Actions</th></tr></thead>
       <tbody>
@@ -561,10 +570,10 @@ function renderReports() {
 
   return `
   <div class="flex justify-between items-center mb-6 no-print">
-    <h1 class="text-xl font-bold text-slate-800">Financial Report</h1>
-    <button id="print-financial-report" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg">Print / PDF</button>
+    <h1 class="text-xl font-bold text-slate-800">📈 Financial Report</h1>
+    <button id="print-financial-report" class="text-sm bg-violet-100 hover:bg-violet-200 text-violet-700 px-3 py-2 rounded-lg font-medium">🖨️ Print / PDF</button>
   </div>
-  <div id="financial-report-area" class="bg-white rounded-xl shadow p-6 space-y-6">
+  <div id="financial-report-area" class="bg-white rounded-xl shadow card-pop p-6 space-y-6 border border-violet-100">
     <div class="text-center border-b pb-4">
       <h2 class="font-bold text-lg">Maagay 1 Phase 1-B Homeowners Association Inc.</h2>
       <p class="text-sm text-slate-500">Statement of Income, Expenses &amp; Balance</p>
@@ -572,9 +581,9 @@ function renderReports() {
     </div>
 
     <div class="grid grid-cols-3 gap-4">
-      <div class="bg-emerald-50 rounded-lg p-4 text-center"><p class="text-xs text-emerald-700">Total Income</p><p class="text-xl font-bold text-emerald-800">${peso(totalIncome)}</p></div>
-      <div class="bg-red-50 rounded-lg p-4 text-center"><p class="text-xs text-red-700">Total Expenses</p><p class="text-xl font-bold text-red-800">${peso(totalExpense)}</p></div>
-      <div class="bg-blue-50 rounded-lg p-4 text-center"><p class="text-xs text-blue-700">Net Balance</p><p class="text-xl font-bold text-blue-800">${peso(net)}</p></div>
+      <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg p-4 text-center border border-emerald-200"><p class="text-xs text-emerald-700">💰 Total Income</p><p class="text-xl font-bold text-emerald-800">${peso(totalIncome)}</p></div>
+      <div class="bg-gradient-to-br from-rose-50 to-rose-100 rounded-lg p-4 text-center border border-rose-200"><p class="text-xs text-rose-700">🧾 Total Expenses</p><p class="text-xl font-bold text-rose-800">${peso(totalExpense)}</p></div>
+      <div class="bg-gradient-to-br from-violet-50 to-violet-100 rounded-lg p-4 text-center border border-violet-200"><p class="text-xs text-violet-700">📈 Net Balance</p><p class="text-xl font-bold text-violet-800">${peso(net)}</p></div>
     </div>
 
     <div>
@@ -598,22 +607,22 @@ function renderEmailBlast() {
     return `<h1 class="text-xl font-bold text-slate-800 mb-6">Email Blast</h1><div class="bg-white rounded-xl shadow p-6 text-slate-500">Only Super Admin can send announcements.</div>`;
   }
   return `
-  <h1 class="text-xl font-bold text-slate-800 mb-6">Email Blast</h1>
-  <div class="bg-white rounded-xl shadow p-6 max-w-2xl">
-    <p class="text-xs text-amber-600 bg-amber-50 rounded-lg p-3 mb-4">
-      Sends via your configured Gmail account (App Password) through a secure Edge Function. Replies will land in your real Gmail inbox.
+  <h1 class="text-xl font-bold text-slate-800 mb-6">✉️ Email Blast</h1>
+  <div class="bg-white rounded-xl shadow card-pop p-6 max-w-2xl border border-cyan-100">
+    <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+      ⚠️ Sends via your configured Gmail account (App Password) through a secure Edge Function. Replies will land in your real Gmail inbox.
     </p>
     <form id="email-form" class="space-y-3">
       <div>
         <label class="text-xs font-medium text-slate-600">Recipients</label>
-        <select id="email-recipients" class="w-full border rounded-lg px-3 py-2 text-sm mt-1">
+        <select id="email-recipients" class="w-full border border-cyan-200 rounded-lg px-3 py-2 text-sm mt-1">
           <option value="all">All Active Homeowners (${state.homeowners.filter(h=>h.status==='active').length})</option>
           <option value="everyone">All Homeowners incl. inactive (${state.homeowners.length})</option>
         </select>
       </div>
-      <input required placeholder="Subject" id="email-subject" class="w-full border rounded-lg px-3 py-2 text-sm">
-      <textarea required placeholder="Message" id="email-body" rows="8" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
-      <button type="submit" id="email-send-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm w-full">Send Announcement</button>
+      <input required placeholder="Subject" id="email-subject" class="w-full border border-cyan-200 rounded-lg px-3 py-2 text-sm">
+      <textarea required placeholder="Message" id="email-body" rows="8" class="w-full border border-cyan-200 rounded-lg px-3 py-2 text-sm"></textarea>
+      <button type="submit" id="email-send-btn" class="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg text-sm w-full font-medium shadow-md shadow-cyan-200">📤 Send Announcement</button>
     </form>
   </div>`;
 }
