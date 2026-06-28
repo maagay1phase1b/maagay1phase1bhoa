@@ -6,6 +6,7 @@
 <title>Maagay 1 Phase 1-B HOA</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   @media print {
@@ -54,6 +55,7 @@ let state = {
   loading: false,
   toast: null,
   adminUsers: [],
+  homeownerSort: { field: null, dir: 'asc' },
 };
 
 const root = document.getElementById('app');
@@ -215,6 +217,9 @@ function render() {
     ${state.toast ? `<div class="fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-white text-sm no-print ${state.toast.isError ? 'bg-red-600' : 'bg-emerald-600'}">${escapeHtml(state.toast.msg)}</div>` : ''}
   `;
   attachHandlers();
+  if (state.currentUser && state.currentUser.type !== 'member' && state.view === 'dashboard') {
+    setTimeout(renderDashboardCharts, 0);
+  }
 }
 
 // =====================================================================
@@ -468,6 +473,7 @@ function renderOverview() {
   const totalExpense = state.expenses.reduce((s,e)=>s+Number(e.amount),0);
   const balance = totalIncome - totalExpense;
   const activeMembers = state.homeowners.filter(h=>h.status==='active').length;
+  const currentYear = new Date().getFullYear();
 
   return `
   <h1 class="text-xl font-bold text-slate-800 mb-6">📊 Dashboard</h1>
@@ -477,6 +483,18 @@ function renderOverview() {
     <div class="bg-white rounded-xl shadow card-pop p-5 border-l-4 border-rose-400"><p class="text-xs text-slate-500 mb-1">🧾 Total Expenses</p><p class="text-2xl font-bold text-rose-500">${peso(totalExpense)}</p></div>
     <div class="bg-white rounded-xl shadow card-pop p-5 border-l-4 border-violet-400"><p class="text-xs text-slate-500 mb-1">📈 Net Balance</p><p class="text-2xl font-bold ${balance>=0?'text-violet-600':'text-rose-600'}">${peso(balance)}</p></div>
   </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow card-pop p-5 border border-emerald-100">
+      <h3 class="font-semibold text-slate-700 mb-3">💰 Monthly Collections — ${currentYear}</h3>
+      <canvas id="income-chart" height="220"></canvas>
+    </div>
+    <div class="bg-white rounded-xl shadow card-pop p-5 border border-rose-100">
+      <h3 class="font-semibold text-slate-700 mb-3">🧾 Monthly Expenses — ${currentYear}</h3>
+      <canvas id="expense-chart" height="220"></canvas>
+    </div>
+  </div>
+
   <div class="bg-white rounded-xl shadow card-pop p-5 border border-emerald-100">
     <h3 class="font-semibold text-slate-700 mb-3">💵 Recent Payments</h3>
     <table>
@@ -490,9 +508,97 @@ function renderOverview() {
   </div>`;
 }
 
+let incomeChartInstance = null;
+let expenseChartInstance = null;
+
+function renderDashboardCharts() {
+  const incomeCanvas = document.getElementById('income-chart');
+  const expenseCanvas = document.getElementById('expense-chart');
+  if (!incomeCanvas || !expenseCanvas || typeof Chart === 'undefined') return;
+
+  const currentYear = new Date().getFullYear();
+  const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  const incomeByMonth = new Array(12).fill(0);
+  state.payments.forEach(p => {
+    if (p.is_voided) return;
+    const d = new Date(p.payment_date);
+    if (d.getFullYear() === currentYear) incomeByMonth[d.getMonth()] += Number(p.amount);
+  });
+
+  const expenseByMonth = new Array(12).fill(0);
+  state.expenses.forEach(e => {
+    const d = new Date(e.expense_date);
+    if (d.getFullYear() === currentYear) expenseByMonth[d.getMonth()] += Number(e.amount);
+  });
+
+  if (incomeChartInstance) incomeChartInstance.destroy();
+  if (expenseChartInstance) expenseChartInstance.destroy();
+
+  incomeChartInstance = new Chart(incomeCanvas, {
+    type: 'line',
+    data: {
+      labels: monthLabels,
+      datasets: [{
+        label: 'Collections',
+        data: incomeByMonth,
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16,185,129,0.12)',
+        tension: 0.3,
+        fill: true,
+        pointBackgroundColor: '#10b981',
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => 'PHP ' + v.toLocaleString() } } }
+    }
+  });
+
+  expenseChartInstance = new Chart(expenseCanvas, {
+    type: 'line',
+    data: {
+      labels: monthLabels,
+      datasets: [{
+        label: 'Expenses',
+        data: expenseByMonth,
+        borderColor: '#f43f5e',
+        backgroundColor: 'rgba(244,63,94,0.12)',
+        tension: 0.3,
+        fill: true,
+        pointBackgroundColor: '#f43f5e',
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => 'PHP ' + v.toLocaleString() } } }
+    }
+  });
+}
+
 // ---------------- HOMEOWNERS ----------------
 function renderHomeowners() {
   const isSuper = state.currentUser.role === 'super_admin';
+  const sort = state.homeownerSort;
+  let rows = [...state.homeowners];
+  if (sort.field) {
+    rows.sort((a, b) => {
+      let av, bv;
+      if (sort.field === 'name') { av = (a.name||'').toLowerCase(); bv = (b.name||'').toLowerCase(); }
+      else { av = parseFloat(a.block) || a.block || ''; bv = parseFloat(b.block) || b.block || ''; }
+      if (av < bv) return sort.dir === 'asc' ? -1 : 1;
+      if (av > bv) return sort.dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+  const arrow = (field) => {
+    if (sort.field !== field) return `<span class="text-slate-300 ml-1">⇕</span>`;
+    return sort.dir === 'asc'
+      ? `<span class="text-blue-600 ml-1">↑</span>`
+      : `<span class="text-blue-600 ml-1">↓</span>`;
+  };
   return `
   <div class="flex justify-between items-center mb-6 no-print">
     <h1 class="text-xl font-bold text-slate-800">🏠 Homeowners</h1>
@@ -503,14 +609,20 @@ function renderHomeowners() {
   </div>
   <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-blue-100">
     <table>
-      <thead><tr><th>Name</th><th>Block</th><th>Lot</th><th>Area</th><th>Email</th><th>Status</th><th>Balance</th><th class="no-print">Actions</th></tr></thead>
+      <thead><tr>
+        <th><button data-sort="name" class="no-print flex items-center hover:text-blue-600">Name${arrow('name')}</button><span class="print-only">Name</span></th>
+        <th><button data-sort="block" class="no-print flex items-center hover:text-blue-600">Block${arrow('block')}</button><span class="print-only">Block</span></th>
+        <th>Lot</th><th>Area</th><th>Email</th><th>Status</th><th>Dues Status</th><th class="no-print">Actions</th>
+      </tr></thead>
       <tbody>
-        ${state.homeowners.map(h=>`
+        ${rows.map(h=>`
           <tr>
             <td>${escapeHtml(h.name)}</td><td>${escapeHtml(h.block||'')}</td><td>${escapeHtml(h.lot||'')}</td>
             <td>${escapeHtml(h.area||'')}</td><td>${escapeHtml(h.email)}</td>
             <td><span class="px-2 py-0.5 rounded text-xs ${h.status==='active'?'bg-emerald-100 text-emerald-700':'bg-slate-100 text-slate-500'}">${h.status}</span></td>
-            <td>${peso(balanceFor(h.id))}</td>
+            <td>${isDuesUpdated(h.id)
+              ? `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">✅ Updated</span>`
+              : `<span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-600">⚠️ Needs Update</span>`}</td>
             <td class="no-print whitespace-nowrap">
               <button data-print-homeowner="${h.id}" class="text-blue-600 hover:underline text-xs mr-2">Statement</button>
               ${isSuper ? `<button data-edit-homeowner="${h.id}" class="text-slate-600 hover:underline text-xs mr-2">Edit</button>
@@ -973,6 +1085,16 @@ function attachHandlers() {
   });
 
   // ---- HOMEOWNERS ----
+  document.querySelectorAll('[data-sort]').forEach(btn => {
+    btn.onclick = () => {
+      const field = btn.dataset.sort;
+      const current = state.homeownerSort;
+      let dir = 'asc';
+      if (current.field === field) dir = current.dir === 'asc' ? 'desc' : 'asc';
+      setState({ homeownerSort: { field, dir } });
+    };
+  });
+
   const addHoBtn = document.getElementById('add-homeowner-btn');
   if (addHoBtn) addHoBtn.onclick = () => openHomeownerModal();
 
