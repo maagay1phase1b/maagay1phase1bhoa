@@ -1,0 +1,36 @@
+# =====================================================================
+# Supabase Keep-Alive Workflow
+#
+# WHERE THIS FILE GOES IN YOUR REPO:
+#   .github/workflows/keep-alive.yml
+#
+# WHAT IT DOES:
+#   Pings your Supabase project every 3 days via a harmless read-only
+#   request. This counts as "activity" and prevents the free-tier
+#   auto-pause that kicks in after 7 days of no usage.
+#
+# SETUP STEPS (see README section below for full detail):
+#   1. Create this exact file at .github/workflows/keep-alive.yml in your repo
+#   2. No secrets needed — it uses your existing public anon key
+#   3. Commit it — GitHub will automatically start running it on schedule
+#   4. You can also trigger it manually anytime from the "Actions" tab
+# =====================================================================
+
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Runs every 3 days at 03:00 UTC. Well under the 7-day pause window.
+    - cron: '0 3 */3 * *'
+  workflow_dispatch: {}   # lets you click "Run workflow" manually to test
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase (read-only request)
+        run: |
+          curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" \
+            "https://fcfworbhttalzlpchjwi.supabase.co/rest/v1/payment_types?select=id&limit=1" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjZndvcmJodHRhbHpscGNoandpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MDU2NjUsImV4cCI6MjA5ODE4MTY2NX0.22etZQalYcsM9H0SDR8hrGHxHuvhs1zUaZh1eZ8et7A" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjZndvcmJodHRhbHpscGNoandpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2MDU2NjUsImV4cCI6MjA5ODE4MTY2NX0.22etZQalYcsM9H0SDR8hrGHxHuvhs1zUaZh1eZ8et7A"
