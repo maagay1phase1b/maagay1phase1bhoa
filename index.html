@@ -175,6 +175,18 @@ function balanceFor(homeownerId) {
   return total;
 }
 
+function isDuesUpdated(homeownerId) {
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  return state.payments.some(p => {
+    if (p.homeowner_id !== homeownerId || p.is_voided) return false;
+    const typeName = (p.payment_types?.name || '').toLowerCase();
+    if (!typeName.includes('monthly dues')) return false;
+    const coverDate = p.period_to || p.period_from || p.payment_date;
+    return new Date(coverDate) >= threeMonthsAgo;
+  });
+}
+
 async function loadAdminUsers() {
   const { data, error } = await sb.rpc('list_app_users');
   if (error) {
