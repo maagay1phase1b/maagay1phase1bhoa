@@ -77,6 +77,21 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function fmtMonthYear(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short' });
+}
+
+function fmtPeriod(p) {
+  if (!p.period_from && !p.period_to) return '';
+  if (p.period_from && p.period_to) {
+    const from = fmtMonthYear(p.period_from);
+    const to = fmtMonthYear(p.period_to);
+    return from === to ? from : `${from} – ${to}`;
+  }
+  return fmtMonthYear(p.period_from || p.period_to);
+}
+
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -269,13 +284,14 @@ function renderMemberDashboard() {
         <button id="print-member-history" class="text-sm bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg font-medium">Print / Save PDF</button>
       </div>
       <table>
-        <thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Amount</th><th>Remarks</th></tr></thead>
+        <thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th></tr></thead>
         <tbody>
-          ${state.payments.length === 0 ? `<tr><td colspan="5" class="text-center text-slate-400">No payments recorded yet.</td></tr>` : state.payments.map(p => `
+          ${state.payments.length === 0 ? `<tr><td colspan="6" class="text-center text-slate-400">No payments recorded yet.</td></tr>` : state.payments.map(p => `
             <tr class="${p.is_voided ? 'opacity-40 line-through' : ''}">
               <td>${fmtDate(p.payment_date)}</td>
               <td>${escapeHtml(p.or_number)}</td>
               <td>${escapeHtml(p.payment_types?.name||'')}</td>
+              <td>${fmtPeriod(p) || '—'}</td>
               <td>${peso(p.amount)}</td>
               <td>${escapeHtml(p.remarks||'')}</td>
             </tr>`).join('')}
@@ -470,7 +486,7 @@ function renderHomeowners() {
     <h1 class="text-xl font-bold text-slate-800">🏠 Homeowners</h1>
     <div class="flex gap-2">
       <button id="print-all-homeowners" class="text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Directory</button>
-      ${isSuper ? `<button id="add-homeowner-btn" class="text-sm bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-blue-200">+ Add Homeowner</button>` : ''}
+      ${isSuper ? `<button id="add-homeowner-btn" class="text-sm text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-blue-200" style="background:linear-gradient(to right,#3b82f6,#06b6d4);">+ Add Homeowner</button>` : ''}
     </div>
   </div>
   <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-blue-100">
@@ -528,13 +544,13 @@ function renderPayments() {
     <h1 class="text-xl font-bold text-slate-800">💵 Payments</h1>
     <div class="flex gap-2">
       ${isSuper ? `<button id="manage-types-btn" class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-2 rounded-lg font-medium">⚙️ Payment Types</button>
-      <button id="add-payment-btn" class="text-sm bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-amber-200">+ Log Payment</button>` : ''}
+      <button id="add-payment-btn" class="text-sm text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-amber-200" style="background:linear-gradient(to right,#fbbf24,#f97316);">+ Log Payment</button>` : ''}
       <button id="print-all-payments" class="text-sm bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Ledger</button>
     </div>
   </div>
   <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-amber-100">
     <table>
-      <thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Type</th><th>Amount</th><th>Remarks</th><th class="no-print">Actions</th></tr></thead>
+      <thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th><th class="no-print">Actions</th></tr></thead>
       <tbody>
         ${state.payments.map(p=>`
           <tr class="${p.is_voided?'opacity-40 line-through':''}">
@@ -543,6 +559,7 @@ function renderPayments() {
             <td>${escapeHtml(p.homeowners?.block||'')}/${escapeHtml(p.homeowners?.lot||'')}</td>
             <td>${escapeHtml(p.or_number)}</td>
             <td>${escapeHtml(p.payment_types?.name||'')}</td>
+            <td>${fmtPeriod(p) ? `<span class="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">${fmtPeriod(p)}</span>` : '<span class="text-slate-300">—</span>'}</td>
             <td>${peso(p.amount)}</td>
             <td>${escapeHtml(p.remarks||'')}</td>
             <td class="no-print whitespace-nowrap">
@@ -551,7 +568,7 @@ function renderPayments() {
               <button data-delete-payment="${p.id}" class="text-red-500 hover:underline text-xs">Delete</button>` : '<span class="text-xs text-slate-400">view only</span>'}
             </td>
           </tr>
-        `).join('') || `<tr><td colspan="8" class="text-center text-slate-400">No payments yet</td></tr>`}
+        `).join('') || `<tr><td colspan="9" class="text-center text-slate-400">No payments yet</td></tr>`}
       </tbody>
     </table>
   </div>
@@ -572,6 +589,13 @@ function renderPayments() {
         <input required placeholder="OR Number" id="pay-or" class="w-full border rounded-lg px-3 py-2 text-sm">
         <input required placeholder="Amount" id="pay-amount" type="number" step="0.01" class="w-full border rounded-lg px-3 py-2 text-sm">
         <input required id="pay-date" type="date" class="w-full border rounded-lg px-3 py-2 text-sm">
+        <div>
+          <label class="text-xs font-medium text-slate-600">Covers Period (optional — e.g. Monthly Dues for several months)</label>
+          <div class="grid grid-cols-2 gap-2 mt-1">
+            <input id="pay-period-from" type="month" placeholder="From" class="border rounded-lg px-3 py-2 text-sm">
+            <input id="pay-period-to" type="month" placeholder="To" class="border rounded-lg px-3 py-2 text-sm">
+          </div>
+        </div>
         <textarea placeholder="Remarks (optional)" id="pay-remarks" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
         <div class="flex gap-2 pt-2">
           <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm">Save</button>
@@ -609,7 +633,7 @@ function renderExpenses() {
   <div class="flex justify-between items-center mb-6 no-print">
     <h1 class="text-xl font-bold text-slate-800">🧾 Expenses</h1>
     <div class="flex gap-2">
-      ${isSuper ? `<button id="add-expense-btn" class="text-sm bg-gradient-to-r from-rose-400 to-pink-500 hover:from-rose-500 hover:to-pink-600 text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-rose-200">+ Add Expense</button>` : ''}
+      ${isSuper ? `<button id="add-expense-btn" class="text-sm text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-rose-200" style="background:linear-gradient(to right,#fb7185,#ec4899);">+ Add Expense</button>` : ''}
       <button id="print-monthly-expenses" class="text-sm bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Monthly</button>
       <button id="print-yearly-expenses" class="text-sm bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Yearly</button>
     </div>
@@ -724,7 +748,7 @@ function renderEmailBlast() {
       </div>
       <input required placeholder="Subject" id="email-subject" class="w-full border border-cyan-200 rounded-lg px-3 py-2 text-sm">
       <textarea required placeholder="Message" id="email-body" rows="8" class="w-full border border-cyan-200 rounded-lg px-3 py-2 text-sm"></textarea>
-      <button type="submit" id="email-send-btn" class="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-4 py-2 rounded-lg text-sm w-full font-medium shadow-md shadow-cyan-200">📤 Send Announcement</button>
+      <button type="submit" id="email-send-btn" class="text-white px-4 py-2 rounded-lg text-sm w-full font-medium shadow-md shadow-cyan-200" style="background:linear-gradient(to right,#22d3ee,#3b82f6);">📤 Send Announcement</button>
     </form>
   </div>`;
 }
@@ -1034,12 +1058,16 @@ function attachHandlers() {
     payForm.onsubmit = async (e) => {
       e.preventDefault();
       const id = document.getElementById('pay-id').value;
+      const periodFromVal = document.getElementById('pay-period-from').value;
+      const periodToVal = document.getElementById('pay-period-to').value;
       const payload = {
         homeowner_id: document.getElementById('pay-homeowner').value,
         payment_type_id: document.getElementById('pay-type').value,
         or_number: document.getElementById('pay-or').value.trim(),
         amount: parseFloat(document.getElementById('pay-amount').value),
         payment_date: document.getElementById('pay-date').value,
+        period_from: periodFromVal ? periodFromVal + '-01' : null,
+        period_to: periodToVal ? periodToVal + '-01' : null,
         remarks: document.getElementById('pay-remarks').value.trim(),
       };
       let error;
@@ -1234,6 +1262,8 @@ function openPaymentModal(p) {
   document.getElementById('pay-or').value = p?.or_number || '';
   document.getElementById('pay-amount').value = p?.amount || '';
   document.getElementById('pay-date').value = p?.payment_date || new Date().toISOString().slice(0,10);
+  document.getElementById('pay-period-from').value = p?.period_from ? p.period_from.slice(0,7) : '';
+  document.getElementById('pay-period-to').value = p?.period_to ? p.period_to.slice(0,7) : '';
   document.getElementById('pay-remarks').value = p?.remarks || '';
   modal.classList.remove('hidden');
 }
@@ -1272,8 +1302,8 @@ function printHomeownerStatement(homeownerId) {
     <h1>Maagay 1 Phase 1-B Homeowners Association Inc.</h1>
     <h2>Statement of Account</h2>
     <p><b>${escapeHtml(ho.name)}</b><br>Block ${escapeHtml(ho.block||'-')}, Lot ${escapeHtml(ho.lot||'-')} &middot; ${escapeHtml(ho.area||'-')} sqm<br>${escapeHtml(ho.email)}</p>
-    <table><thead><tr><th>Date</th><th>OR #</th><th>Payment Type</th><th>Amount</th><th>Remarks</th></tr></thead>
-    <tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${escapeHtml(p.or_number)}</td><td>${escapeHtml(p.payment_types?.name||'')}</td><td>${peso(p.amount)}</td><td>${escapeHtml(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')}</tbody></table>
+    <table><thead><tr><th>Date</th><th>OR #</th><th>Payment Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th></tr></thead>
+    <tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${escapeHtml(p.or_number)}</td><td>${escapeHtml(p.payment_types?.name||'')}</td><td>${fmtPeriod(p) || '—'}</td><td>${peso(p.amount)}</td><td>${escapeHtml(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')}</tbody></table>
     <p class="total">Total Paid: ${peso(total)}</p>
     <p style="font-size:11px;color:#94a3b8;margin-top:30px">Generated ${fmtDate(new Date())}</p>
     </body></html>
