@@ -73,6 +73,7 @@ let state = {
   homeownerSearch: '',
   reportMode: 'yearly',   // 'yearly' | 'monthly' | 'all'
   reportMonth: new Date().getMonth(),
+  duesAnnualTarget: 900,
 };
 
 const root = document.getElementById('app');
@@ -1047,6 +1048,8 @@ function renderReports() {
     </div>
   </div>
 
+  ${renderDuesGridSection(years)}
+
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
     <div class="bg-white rounded-xl shadow card-pop p-5 border border-violet-100">
       <h3 class="font-semibold text-slate-700 mb-1">👤 Member Statement(s)</h3>
@@ -1087,6 +1090,61 @@ function renderReports() {
   </div>`;
 }
 
+function renderDuesGridSection(years) {
+  const target = state.duesAnnualTarget;
+  const duesType = state.paymentTypes.find(t => (t.name||'').toLowerCase().includes('monthly dues'));
+  const activeHomeowners = state.homeowners.filter(h => h.status === 'active');
+
+  // Sum monthly dues paid per homeowner per year, based on payment_date (date
+  // actually received), never period_from/period_to.
+  const totals = {};
+  activeHomeowners.forEach(h => { totals[h.id] = {}; years.forEach(y => totals[h.id][y] = 0); });
+
+  state.payments.forEach(p => {
+    if (p.is_voided) return;
+    if (duesType && p.payment_type_id !== duesType.id) return;
+    if (!duesType && (p.payment_types?.name||'').toLowerCase().indexOf('monthly dues') === -1) return;
+    const y = new Date(p.payment_date).getFullYear();
+    if (totals[p.homeowner_id] && totals[p.homeowner_id][y] !== undefined) {
+      totals[p.homeowner_id][y] += Number(p.amount);
+    }
+  });
+
+  const cellStyle = (paid) => {
+    if (paid <= 0) return 'background:#fee2e2;color:#991b1b;';
+    if (paid >= target) return 'background:#dcfce7;color:#166534;';
+    return 'background:#fef9c3;color:#854d0e;';
+  };
+
+  const rows = activeHomeowners.map(h => `
+    <tr>
+      <td style="text-align:left;font-weight:500;">${escapeHtml(h.name)}</td>
+      <td style="text-align:left;">${escapeHtml(h.block||'')}/${escapeHtml(h.lot||'')}</td>
+      ${years.map(y => `<td style="${cellStyle(totals[h.id][y])}">${peso(totals[h.id][y])}</td>`).join('')}
+    </tr>
+  `).join('') || `<tr><td colspan="${years.length+2}" class="text-center text-slate-400">No active homeowners</td></tr>`;
+
+  return `
+  <div class="bg-white rounded-xl shadow card-pop p-6 border border-emerald-100 mt-6" id="dues-grid-area">
+    <div class="flex flex-wrap justify-between items-center gap-3 mb-3 no-print">
+      <div>
+        <h3 class="font-semibold text-slate-700">🗓️ Monthly Dues — Yearly Collection Grid</h3>
+        <p class="text-xs text-slate-500">Total Monthly Dues paid per year, per homeowner. Green = fully paid, yellow = partial, red = none.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-medium text-slate-600">Full year amount (₱):</label>
+        <input type="number" id="dues-target-input" value="${target}" step="1" class="w-24 border border-emerald-200 rounded-lg px-2 py-1 text-sm">
+        <button id="print-dues-grid" class="text-sm bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 rounded-lg font-medium">🖨️ Print Grid</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table>
+        <thead><tr><th>Name</th><th>Blk/Lot</th>${years.map(y=>`<th style="text-align:center;">${y}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
 // ---------------- EMAIL BLAST ----------------
 function renderEmailBlast() {
   const isSuper = state.currentUser.role === 'super_admin';
@@ -1723,6 +1781,17 @@ function attachHandlers() {
   const reportMonthSelect = document.getElementById('report-month-select');
   if (reportMonthSelect) reportMonthSelect.onchange = () => setState({ reportMonth: parseInt(reportMonthSelect.value) });
 
+  // ---- REPORTS: dues grid ----
+  const duesTargetInput = document.getElementById('dues-target-input');
+  if (duesTargetInput) {
+    duesTargetInput.onchange = () => {
+      const val = parseFloat(duesTargetInput.value);
+      if (val > 0) setState({ duesAnnualTarget: val });
+    };
+  }
+  const printDuesGrid = document.getElementById('print-dues-grid');
+  if (printDuesGrid) printDuesGrid.onclick = () => printDuesGridFn();
+
   // ---- REPORTS: member search/select ----
   const reportMemberSearch = document.getElementById('report-member-search');
   if (reportMemberSearch) {
@@ -1809,45 +1878,36 @@ function attachHandlers() {
   // ---- EMAIL BLAST ----
   const emailForm = document.getElementById('email-form');
   if (emailForm) {
-    emailForm.onsubmit = async (e) => {
+    emailForm.onsubmit = (e) => {
       e.preventDefault();
       const recipientMode = document.getElementById('email-recipients').value;
       const subject = document.getElementById('email-subject').value.trim();
       const body = document.getElementById('email-body').value.trim();
       const recipients = state.homeowners
-        .filter(h => recipientMode === 'everyone' || h.status === 'active')
+        .filter(h => (recipientMode === 'everyone' || h.status === 'active') && h.email)
         .map(h => h.email);
 
-      if (recipients.length === 0) return toast('No recipients found.', true);
+      if (recipients.length === 0) return toast('No homeowners with an email on file match this filter.', true);
 
-      const sendBtn = document.getElementById('email-send-btn');
-      sendBtn.disabled = true;
-      sendBtn.textContent = 'Sending...';
-
-      try {
-        const resp = await fetch(EDGE_FUNCTION_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({ subject, body, recipients })
-        });
-        const result = await resp.json();
-        if (!resp.ok) throw new Error(result.error || 'Send failed');
-
-        await sb.from('email_blasts').insert({
-          subject, body, recipient_count: recipients.length, sent_by: state.currentUser.id
-        });
-
-        toast(`Sent to ${recipients.length} homeowner(s)`);
-        emailForm.reset();
-      } catch (err) {
-        toast('Send failed: ' + err.message, true);
-      } finally {
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send Announcement';
+      // mailto: links have a practical length limit (~1800-2000 chars across
+      // browsers). Batch recipients into multiple BCC groups so nothing gets
+      // silently dropped for large lists.
+      const BATCH_SIZE = 40;
+      const batches = [];
+      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+        batches.push(recipients.slice(i, i + BATCH_SIZE));
       }
+
+      batches.forEach((batch, i) => {
+        const bcc = batch.join(',');
+        const mailtoUrl = `mailto:?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        // Stagger window opens slightly so browsers don't block them as popups
+        setTimeout(() => window.open(mailtoUrl, '_blank'), i * 400);
+      });
+
+      toast(batches.length > 1
+        ? `Opening ${batches.length} Gmail windows (${recipients.length} recipients total, batched by ${BATCH_SIZE}).`
+        : `Opening Gmail with ${recipients.length} recipient(s) BCC'd.`);
     };
   }
 }
@@ -2114,6 +2174,74 @@ function printRankingReportFn() {
     <p style="font-size:11px;color:#94a3b8;">Active homeowners with PHP 0.00 / "NO PAYMENT" shown in red have not paid this type at all.</p>
     ${sections}
     <p style="font-size:11px;color:#94a3b8;margin-top:30px">Generated ${fmtDate(new Date())}</p>
+    </body></html>
+  `);
+  win.document.close();
+  setTimeout(() => win.print(), 300);
+}
+
+function printDuesGridFn() {
+  const allYears = new Set();
+  state.payments.forEach(p => allYears.add(new Date(p.payment_date).getFullYear()));
+  allYears.add(new Date().getFullYear());
+  const years = [...allYears].sort((a,b) => a - b);
+
+  const target = state.duesAnnualTarget;
+  const duesType = state.paymentTypes.find(t => (t.name||'').toLowerCase().includes('monthly dues'));
+  const activeHomeowners = state.homeowners.filter(h => h.status === 'active');
+
+  const totals = {};
+  activeHomeowners.forEach(h => { totals[h.id] = {}; years.forEach(y => totals[h.id][y] = 0); });
+  state.payments.forEach(p => {
+    if (p.is_voided) return;
+    if (duesType && p.payment_type_id !== duesType.id) return;
+    if (!duesType && (p.payment_types?.name||'').toLowerCase().indexOf('monthly dues') === -1) return;
+    const y = new Date(p.payment_date).getFullYear();
+    if (totals[p.homeowner_id] && totals[p.homeowner_id][y] !== undefined) {
+      totals[p.homeowner_id][y] += Number(p.amount);
+    }
+  });
+
+  const cellStyle = (paid) => {
+    if (paid <= 0) return 'background:#fee2e2;color:#991b1b;';
+    if (paid >= target) return 'background:#dcfce7;color:#166534;';
+    return 'background:#fef9c3;color:#854d0e;';
+  };
+
+  const rows = activeHomeowners.map(h => `
+    <tr>
+      <td>${escapeHtml(h.name)}</td>
+      <td>${escapeHtml(h.block||'')}/${escapeHtml(h.lot||'')}</td>
+      ${years.map(y => `<td style="${cellStyle(totals[h.id][y])}text-align:center;">${peso(totals[h.id][y])}</td>`).join('')}
+    </tr>
+  `).join('');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html><head><title>Monthly Dues Collection Grid</title>
+    <style>
+      @page { size: 8.5in 13in landscape; margin: 0.4in; }
+      body{font-family:Arial,sans-serif;padding:10px;color:#1e293b}
+      h1{font-size:18px;margin-bottom:0} h2{font-size:13px;color:#64748b;margin-top:4px;font-weight:normal}
+      table{width:100%;border-collapse:collapse;margin-top:14px}
+      th,td{border:1px solid #cbd5e1;padding:6px 8px;font-size:11px;text-align:left}
+      th{background:#f1f5f9;text-align:center;}
+      .legend{display:flex;gap:16px;margin-top:10px;font-size:11px;}
+      .swatch{display:inline-block;width:12px;height:12px;margin-right:4px;vertical-align:middle;}
+      .meta{font-size:10px;color:#94a3b8;margin-top:20px}
+    </style></head><body>
+    <h1>Maagay 1 Phase 1-B Homeowners Association Inc.</h1>
+    <h2>Monthly Dues — Yearly Collection Grid (Full year = ${peso(target)})</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Blk/Lot</th>${years.map(y=>`<th>${y}</th>`).join('')}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="legend">
+      <span><span class="swatch" style="background:#dcfce7;"></span>Fully Paid</span>
+      <span><span class="swatch" style="background:#fef9c3;"></span>Partial</span>
+      <span><span class="swatch" style="background:#fee2e2;"></span>None</span>
+    </div>
+    <p class="meta">Generated ${fmtDate(new Date())} &middot; Based on date payment was received</p>
     </body></html>
   `);
   win.document.close();
