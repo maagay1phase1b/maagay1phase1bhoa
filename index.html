@@ -1809,36 +1809,45 @@ function attachHandlers() {
   // ---- EMAIL BLAST ----
   const emailForm = document.getElementById('email-form');
   if (emailForm) {
-    emailForm.onsubmit = (e) => {
+    emailForm.onsubmit = async (e) => {
       e.preventDefault();
       const recipientMode = document.getElementById('email-recipients').value;
       const subject = document.getElementById('email-subject').value.trim();
       const body = document.getElementById('email-body').value.trim();
       const recipients = state.homeowners
-        .filter(h => (recipientMode === 'everyone' || h.status === 'active') && h.email)
+        .filter(h => recipientMode === 'everyone' || h.status === 'active')
         .map(h => h.email);
 
-      if (recipients.length === 0) return toast('No homeowners with an email on file match this filter.', true);
+      if (recipients.length === 0) return toast('No recipients found.', true);
 
-      // mailto: links have a practical length limit (~1800-2000 chars across
-      // browsers). Batch recipients into multiple BCC groups so nothing gets
-      // silently dropped for large lists.
-      const BATCH_SIZE = 40;
-      const batches = [];
-      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
-        batches.push(recipients.slice(i, i + BATCH_SIZE));
+      const sendBtn = document.getElementById('email-send-btn');
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+
+      try {
+        const resp = await fetch(EDGE_FUNCTION_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({ subject, body, recipients })
+        });
+        const result = await resp.json();
+        if (!resp.ok) throw new Error(result.error || 'Send failed');
+
+        await sb.from('email_blasts').insert({
+          subject, body, recipient_count: recipients.length, sent_by: state.currentUser.id
+        });
+
+        toast(`Sent to ${recipients.length} homeowner(s)`);
+        emailForm.reset();
+      } catch (err) {
+        toast('Send failed: ' + err.message, true);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send Announcement';
       }
-
-      batches.forEach((batch, i) => {
-        const bcc = batch.join(',');
-        const mailtoUrl = `mailto:?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        // Stagger window opens slightly so browsers don't block them as popups
-        setTimeout(() => window.open(mailtoUrl, '_blank'), i * 400);
-      });
-
-      toast(batches.length > 1
-        ? `Opening ${batches.length} Gmail windows (${recipients.length} recipients total, batched by ${BATCH_SIZE}).`
-        : `Opening Gmail with ${recipients.length} recipient(s) BCC'd.`);
     };
   }
 }
