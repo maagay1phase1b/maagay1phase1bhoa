@@ -58,6 +58,9 @@ let state = {
   homeownerSort: { field: null, dir: 'asc' },
   paymentFilter: { search: '', typeId: '' },
   paymentSort: { field: null, dir: 'asc' },
+  reportMemberSearch: '',
+  reportSelectedMembers: [],
+  reportSelectedTypes: [],
 };
 
 const root = document.getElementById('app');
@@ -961,6 +964,45 @@ function renderReports() {
       <table><thead><tr><th>Category</th><th>Total Spent</th></tr></thead>
       <tbody>${expenseByCat.map(x=>`<tr><td>${escapeHtml(x.name)}</td><td>${peso(x.total)}</td></tr>`).join('') || `<tr><td colspan="2" class="text-center text-slate-400">No expenses recorded</td></tr>`}</tbody></table>
     </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+    <div class="bg-white rounded-xl shadow card-pop p-5 border border-violet-100">
+      <h3 class="font-semibold text-slate-700 mb-1">👤 Member Statement(s)</h3>
+      <p class="text-xs text-slate-500 mb-3">Print full payment history for one or more chosen homeowners.</p>
+      <div class="relative mb-2">
+        <input type="text" id="report-member-search" placeholder="Search by name..." value="${escapeHtml(state.reportMemberSearch)}"
+          class="w-full border border-violet-200 rounded-lg px-3 py-2 text-sm">
+        <div id="report-member-results" class="hidden absolute z-10 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+      </div>
+      <div id="report-member-chips" class="flex flex-wrap gap-1 mb-3">
+        ${state.reportSelectedMembers.map(id => {
+          const h = state.homeowners.find(x => x.id === id);
+          return h ? `<span class="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded-full flex items-center gap-1">${escapeHtml(h.name)} <button data-remove-report-member="${id}" class="hover:text-violet-900 font-bold">×</button></span>` : '';
+        }).join('') || `<span class="text-xs text-slate-400">No members selected yet</span>`}
+      </div>
+      <button id="print-member-statements" class="w-full text-white py-2 rounded-lg text-sm font-medium" style="background:linear-gradient(to right,#a78bfa,#8b5cf6);">🖨️ Print Selected</button>
+    </div>
+
+    <div class="bg-white rounded-xl shadow card-pop p-5 border border-amber-100">
+      <h3 class="font-semibold text-slate-700 mb-1">💵 By Payment Type</h3>
+      <p class="text-xs text-slate-500 mb-3">Print all payment records for one or more chosen payment types.</p>
+      <div class="space-y-1 mb-3 max-h-40 overflow-y-auto border border-amber-100 rounded-lg p-2">
+        ${state.paymentTypes.map(t => `
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" data-report-type-checkbox="${t.id}" ${state.reportSelectedTypes.includes(t.id)?'checked':''}>
+            ${escapeHtml(t.name)}
+          </label>
+        `).join('')}
+      </div>
+      <button id="print-type-report" class="w-full text-white py-2 rounded-lg text-sm font-medium" style="background:linear-gradient(to right,#fbbf24,#f59e0b);">🖨️ Print Selected Types</button>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow card-pop p-5 border border-rose-100 mt-4">
+    <h3 class="font-semibold text-slate-700 mb-1">📋 Payment Ranking — Who's Paying, Who's Not</h3>
+    <p class="text-xs text-slate-500 mb-3">Lists every homeowner's total paid per payment type, sorted highest to lowest, to spot non-payers at a glance.</p>
+    <button id="print-ranking-report" class="text-white px-4 py-2 rounded-lg text-sm font-medium" style="background:linear-gradient(to right,#fb7185,#e11d48);">🖨️ Print Ranking Report</button>
   </div>`;
 }
 
@@ -1570,7 +1612,82 @@ function attachHandlers() {
     };
   }
 
-  // ---- REPORTS ----
+  // ---- REPORTS: member search/select ----
+  const reportMemberSearch = document.getElementById('report-member-search');
+  if (reportMemberSearch) {
+    const resultsBox = document.getElementById('report-member-results');
+    reportMemberSearch.oninput = () => {
+      const cursorPos = reportMemberSearch.selectionStart;
+      const q = reportMemberSearch.value.trim().toLowerCase();
+      setState({ reportMemberSearch: reportMemberSearch.value });
+      const refreshed = document.getElementById('report-member-search');
+      if (refreshed) { refreshed.focus(); refreshed.setSelectionRange(cursorPos, cursorPos); }
+      const box = document.getElementById('report-member-results');
+      if (!q) { box.classList.add('hidden'); return; }
+      const matches = state.homeowners.filter(h => (h.name||'').toLowerCase().includes(q) && !state.reportSelectedMembers.includes(h.id)).slice(0, 15);
+      box.innerHTML = matches.map(h => `
+        <button type="button" data-add-report-member="${h.id}" class="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 block">
+          ${escapeHtml(h.name)} <span class="text-xs text-slate-400">(Blk ${escapeHtml(h.block||'-')} Lot ${escapeHtml(h.lot||'-')})</span>
+        </button>
+      `).join('') || `<div class="px-3 py-2 text-sm text-slate-400">No matches.</div>`;
+      box.querySelectorAll('[data-add-report-member]').forEach(btn => {
+        btn.onclick = () => {
+          setState({
+            reportSelectedMembers: [...state.reportSelectedMembers, btn.dataset.addReportMember],
+            reportMemberSearch: '',
+          });
+        };
+      });
+      box.classList.remove('hidden');
+    };
+    document.addEventListener('click', (e) => {
+      if (resultsBox && !reportMemberSearch.contains(e.target) && !resultsBox.contains(e.target)) {
+        resultsBox.classList.add('hidden');
+      }
+    });
+  }
+
+  document.querySelectorAll('[data-remove-report-member]').forEach(btn => {
+    btn.onclick = () => {
+      setState({ reportSelectedMembers: state.reportSelectedMembers.filter(id => id !== btn.dataset.removeReportMember) });
+    };
+  });
+
+  // ---- REPORTS: payment type checkboxes ----
+  document.querySelectorAll('[data-report-type-checkbox]').forEach(cb => {
+    cb.onchange = () => {
+      const id = cb.dataset.reportTypeCheckbox;
+      const current = state.reportSelectedTypes;
+      const updated = cb.checked ? [...current, id] : current.filter(x => x !== id);
+      setState({ reportSelectedTypes: updated });
+    };
+  });
+
+  // ---- REPORTS: print buttons ----
+  const printMemberStatements = document.getElementById('print-member-statements');
+  if (printMemberStatements) {
+    printMemberStatements.onclick = () => {
+      if (state.reportSelectedMembers.length === 0) {
+        toast('Select at least one member first.', true);
+        return;
+      }
+      printMemberStatementsReport(state.reportSelectedMembers);
+    };
+  }
+
+  const printTypeReport = document.getElementById('print-type-report');
+  if (printTypeReport) {
+    printTypeReport.onclick = () => {
+      if (state.reportSelectedTypes.length === 0) {
+        toast('Select at least one payment type first.', true);
+        return;
+      }
+      printTypeReportFn(state.reportSelectedTypes);
+    };
+  }
+
+  const printRankingReport = document.getElementById('print-ranking-report');
+  if (printRankingReport) printRankingReport.onclick = () => printRankingReportFn();
   const printReportBtn = document.getElementById('print-financial-report');
   if (printReportBtn) printReportBtn.onclick = () => window.print();
 
@@ -1773,6 +1890,109 @@ function printLedger(fromDate, toDate) {
     <table><thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th></tr></thead>
     <tbody>${rows.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${escapeHtml(p.homeowners?.name||'')}</td><td>${escapeHtml(p.homeowners?.block||'')}/${escapeHtml(p.homeowners?.lot||'')}</td><td>${escapeHtml(p.or_number)}</td><td>${escapeHtml(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${escapeHtml(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('') || `<tr><td colspan="8">No payments found in this range.</td></tr>`}</tbody></table>
     <p class="total">Total (excluding voided): ${peso(total)}</p>
+    <p style="font-size:11px;color:#94a3b8;margin-top:30px">Generated ${fmtDate(new Date())}</p>
+    </body></html>
+  `);
+  win.document.close();
+  setTimeout(() => win.print(), 300);
+}
+
+function printMemberStatementsReport(memberIds) {
+  const members = state.homeowners.filter(h => memberIds.includes(h.id));
+  const sections = members.map(ho => {
+    const pays = state.payments.filter(p => p.homeowner_id === ho.id);
+    const total = pays.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+    return `
+      <div style="margin-bottom:30px;">
+        <p><b>${escapeHtml(ho.name)}</b><br>Block ${escapeHtml(ho.block||'-')}, Lot ${escapeHtml(ho.lot||'-')} &middot; ${escapeHtml(ho.area||'-')} sqm<br>${escapeHtml(ho.email||'No email on file')}</p>
+        <table><thead><tr><th>Date</th><th>OR #</th><th>Payment Type</th><th>Period Covered</th><th>Amount</th><th>Remarks</th></tr></thead>
+        <tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${escapeHtml(p.or_number)}</td><td>${escapeHtml(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${escapeHtml(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('') || `<tr><td colspan="6">No payments recorded.</td></tr>`}</tbody></table>
+        <p style="margin-top:8px;font-weight:bold;">Total Paid: ${peso(total)}</p>
+      </div>
+    `;
+  }).join('<hr style="margin:20px 0;border-top:1px dashed #cbd5e1;">');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html><head><title>Member Statements</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:30px;color:#1e293b}
+      h1{font-size:18px;margin-bottom:0} h2{font-size:14px;color:#64748b;margin-top:4px}
+      table{width:100%;border-collapse:collapse;margin-top:10px}
+      th,td{border:1px solid #cbd5e1;padding:6px 8px;font-size:12px;text-align:left}
+      th{background:#f1f5f9}
+    </style></head><body>
+    <h1>Maagay 1 Phase 1-B Homeowners Association Inc.</h1>
+    <h2>Member Statement(s) — ${members.length} member(s)</h2>
+    ${sections}
+    <p style="font-size:11px;color:#94a3b8;margin-top:30px">Generated ${fmtDate(new Date())}</p>
+    </body></html>
+  `);
+  win.document.close();
+  setTimeout(() => win.print(), 300);
+}
+
+function printTypeReportFn(typeIds) {
+  const types = state.paymentTypes.filter(t => typeIds.includes(t.id));
+  const rows = state.payments.filter(p => typeIds.includes(p.payment_type_id));
+  rows.sort((a,b) => new Date(b.payment_date) - new Date(a.payment_date));
+  const total = rows.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+  const typeNames = types.map(t=>t.name).join(', ');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html><head><title>Payment Type Report</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:30px;color:#1e293b}
+      h1{font-size:18px;margin-bottom:0} h2{font-size:14px;color:#64748b;margin-top:4px}
+      table{width:100%;border-collapse:collapse;margin-top:16px}
+      th,td{border:1px solid #cbd5e1;padding:6px 8px;font-size:12px;text-align:left}
+      th{background:#f1f5f9}
+      .total{margin-top:16px;font-size:15px;font-weight:bold}
+    </style></head><body>
+    <h1>Maagay 1 Phase 1-B Homeowners Association Inc.</h1>
+    <h2>Payment Report — ${escapeHtml(typeNames)}</h2>
+    <table><thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Period Covered</th><th>Amount</th><th>Remarks</th></tr></thead>
+    <tbody>${rows.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${escapeHtml(p.homeowners?.name||'')}</td><td>${escapeHtml(p.homeowners?.block||'')}/${escapeHtml(p.homeowners?.lot||'')}</td><td>${escapeHtml(p.or_number)}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${escapeHtml(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('') || `<tr><td colspan="7">No payments found for the selected type(s).</td></tr>`}</tbody></table>
+    <p class="total">Total (excluding voided): ${peso(total)}</p>
+    <p style="font-size:11px;color:#94a3b8;margin-top:30px">Generated ${fmtDate(new Date())}</p>
+    </body></html>
+  `);
+  win.document.close();
+  setTimeout(() => win.print(), 300);
+}
+
+function printRankingReportFn() {
+  const activeHomeowners = state.homeowners.filter(h => h.status === 'active');
+  const sections = state.paymentTypes.map(t => {
+    const ranked = activeHomeowners.map(h => {
+      const total = state.payments
+        .filter(p => p.homeowner_id === h.id && p.payment_type_id === t.id && !p.is_voided)
+        .reduce((s,p) => s + Number(p.amount), 0);
+      return { name: h.name, block: h.block, lot: h.lot, total };
+    }).sort((a,b) => b.total - a.total);
+
+    return `
+      <h3 style="font-size:13px;margin-top:24px;margin-bottom:6px;">${escapeHtml(t.name)}</h3>
+      <table><thead><tr><th>#</th><th>Homeowner</th><th>Blk/Lot</th><th>Total Paid</th></tr></thead>
+      <tbody>${ranked.map((r,i)=>`<tr style="${r.total===0?'color:#dc2626;':''}"><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.block||'')}/${escapeHtml(r.lot||'')}</td><td>${r.total===0?'NO PAYMENT':peso(r.total)}</td></tr>`).join('')}</tbody></table>
+    `;
+  }).join('');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html><head><title>Payment Ranking Report</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:30px;color:#1e293b}
+      h1{font-size:18px;margin-bottom:0} h2{font-size:14px;color:#64748b;margin-top:4px}
+      table{width:100%;border-collapse:collapse;margin-top:6px}
+      th,td{border:1px solid #cbd5e1;padding:6px 8px;font-size:12px;text-align:left}
+      th{background:#f1f5f9}
+    </style></head><body>
+    <h1>Maagay 1 Phase 1-B Homeowners Association Inc.</h1>
+    <h2>Payment Ranking Report — by Payment Type, Highest to Lowest</h2>
+    <p style="font-size:11px;color:#94a3b8;">Active homeowners with PHP 0.00 / "NO PAYMENT" shown in red have not paid this type at all.</p>
+    ${sections}
     <p style="font-size:11px;color:#94a3b8;margin-top:30px">Generated ${fmtDate(new Date())}</p>
     </body></html>
   `);
