@@ -24,6 +24,13 @@
   .tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 10px; flex-shrink: 0; border-radius: 6px; }
   .card-pop { transition: transform 0.15s ease, box-shadow 0.15s ease; }
   .card-pop:hover { transform: translateY(-2px); box-shadow: 0 8px 20px -4px rgba(0,0,0,0.08); }
+  .sidebar-mobile { transition: transform 0.25s ease; }
+  @media (max-width: 767px) {
+    .sidebar-mobile { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); z-index: 50; width: 80vw; max-width: 280px; }
+    .sidebar-mobile.open { transform: translateX(0); }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+    .sidebar-overlay.open { display: block; }
+  }
 </style>
 </head>
 <body class="app-bg min-h-screen">
@@ -61,6 +68,8 @@ let state = {
   reportMemberSearch: '',
   reportSelectedMembers: [],
   reportSelectedTypes: [],
+  mobileSidebarOpen: false,
+  reportYear: new Date().getFullYear(),
 };
 
 const root = document.getElementById('app');
@@ -921,30 +930,49 @@ function renderExpenses() {
 
 // ---------------- REPORTS ----------------
 function renderReports() {
-  const totalIncome = state.payments.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
-  const totalExpense = state.expenses.reduce((s,e)=>s+Number(e.amount),0);
+  const allYears = new Set();
+  state.payments.forEach(p => allYears.add(new Date(p.payment_date).getFullYear()));
+  state.expenses.forEach(e => allYears.add(new Date(e.expense_date).getFullYear()));
+  allYears.add(new Date().getFullYear());
+  const years = [...allYears].sort((a,b) => b - a);
+
+  const selectedYear = state.reportYear;
+  const isAllTime = selectedYear === 'all';
+
+  const yearPayments = isAllTime ? state.payments : state.payments.filter(p => new Date(p.payment_date).getFullYear() === selectedYear);
+  const yearExpenses = isAllTime ? state.expenses : state.expenses.filter(e => new Date(e.expense_date).getFullYear() === selectedYear);
+
+  const totalIncome = yearPayments.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+  const totalExpense = yearExpenses.reduce((s,e)=>s+Number(e.amount),0);
   const net = totalIncome - totalExpense;
 
   const incomeByType = state.paymentTypes.map(t=>({
     name: t.name,
-    total: state.payments.filter(p=>p.payment_type_id===t.id && !p.is_voided).reduce((s,p)=>s+Number(p.amount),0)
+    total: yearPayments.filter(p=>p.payment_type_id===t.id && !p.is_voided).reduce((s,p)=>s+Number(p.amount),0)
   })).filter(x=>x.total>0);
 
   const expenseByCat = state.expenseCategories.map(c=>({
     name: c.name,
-    total: state.expenses.filter(e=>e.category_id===c.id).reduce((s,e)=>s+Number(e.amount),0)
+    total: yearExpenses.filter(e=>e.category_id===c.id).reduce((s,e)=>s+Number(e.amount),0)
   })).filter(x=>x.total>0);
 
   return `
-  <div class="flex justify-between items-center mb-6 no-print">
+  <div class="flex flex-wrap justify-between items-center gap-3 mb-6 no-print">
     <h1 class="text-xl font-bold text-slate-800">📈 Financial Report</h1>
-    <button id="print-financial-report" class="text-sm bg-violet-100 hover:bg-violet-200 text-violet-700 px-3 py-2 rounded-lg font-medium">🖨️ Print / PDF</button>
+    <div class="flex items-center gap-2">
+      <label class="text-xs font-medium text-slate-600">Year:</label>
+      <select id="report-year-select" class="border border-violet-200 rounded-lg px-3 py-2 text-sm">
+        <option value="all" ${isAllTime?'selected':''}>All Time</option>
+        ${years.map(y => `<option value="${y}" ${selectedYear===y?'selected':''}>${y}</option>`).join('')}
+      </select>
+      <button id="print-financial-report" class="text-sm bg-violet-100 hover:bg-violet-200 text-violet-700 px-3 py-2 rounded-lg font-medium">🖨️ Print / PDF</button>
+    </div>
   </div>
   <div id="financial-report-area" class="bg-white rounded-xl shadow card-pop p-6 space-y-6 border border-violet-100">
     <div class="text-center border-b pb-4">
       <h2 class="font-bold text-lg">Maagay 1 Phase 1-B Homeowners Association Inc.</h2>
       <p class="text-sm text-slate-500">Statement of Income, Expenses &amp; Balance</p>
-      <p class="text-xs text-slate-400">As of ${fmtDate(new Date())}</p>
+      <p class="text-xs text-slate-400">${isAllTime ? 'All Time' : `Year ${selectedYear}`} &middot; Printed ${fmtDate(new Date())}</p>
     </div>
 
     <div class="grid grid-cols-3 gap-4">
@@ -1237,8 +1265,18 @@ function attachHandlers() {
 
   // ---- NAV ----
   document.querySelectorAll('[data-nav]').forEach(btn => {
-    btn.onclick = () => setState({ view: btn.dataset.nav });
+    btn.onclick = () => setState({ view: btn.dataset.nav, mobileSidebarOpen: false });
   });
+
+  // ---- MOBILE SIDEBAR TOGGLE ----
+  const sidebarOpenBtn = document.getElementById('sidebar-open-btn');
+  if (sidebarOpenBtn) sidebarOpenBtn.onclick = () => setState({ mobileSidebarOpen: true });
+
+  const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+  if (sidebarCloseBtn) sidebarCloseBtn.onclick = () => setState({ mobileSidebarOpen: false });
+
+  const sidebarOverlay = document.getElementById('sidebar-overlay');
+  if (sidebarOverlay) sidebarOverlay.onclick = () => setState({ mobileSidebarOpen: false });
 
   // ---- HOMEOWNERS ----
   document.querySelectorAll('[data-sort]').forEach(btn => {
