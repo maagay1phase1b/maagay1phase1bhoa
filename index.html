@@ -70,6 +70,9 @@ let state = {
   reportSelectedTypes: [],
   mobileSidebarOpen: false,
   reportYear: new Date().getFullYear(),
+  homeownerSearch: '',
+  reportMode: 'yearly',   // 'yearly' | 'monthly' | 'all'
+  reportMonth: new Date().getMonth(),
 };
 
 const root = document.getElementById('app');
@@ -596,7 +599,16 @@ function renderDashboardCharts() {
 function renderHomeowners() {
   const isSuper = state.currentUser.role === 'super_admin';
   const sort = state.homeownerSort;
+  const q = state.homeownerSearch.trim().toLowerCase();
   let rows = [...state.homeowners];
+  if (q) {
+    rows = rows.filter(h =>
+      (h.name||'').toLowerCase().includes(q) ||
+      (h.block||'').toLowerCase().includes(q) ||
+      (h.lot||'').toLowerCase().includes(q) ||
+      (h.email||'').toLowerCase().includes(q)
+    );
+  }
   if (sort.field) {
     rows.sort((a, b) => {
       let av, bv;
@@ -621,6 +633,13 @@ function renderHomeowners() {
       ${isSuper ? `<button id="add-homeowner-btn" class="text-sm text-white px-3 py-2 rounded-lg font-medium shadow-md shadow-blue-200" style="background:linear-gradient(to right,#3b82f6,#06b6d4);">+ Add Homeowner</button>` : ''}
     </div>
   </div>
+
+  <div class="bg-white rounded-xl shadow card-pop p-4 mb-4 border border-blue-100 no-print">
+    <label class="text-xs font-medium text-slate-600">Search</label>
+    <input type="text" id="homeowner-search" placeholder="Search by name, block, lot, or email..." value="${escapeHtml(state.homeownerSearch)}"
+      class="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm mt-1">
+  </div>
+
   <div class="bg-white rounded-xl shadow card-pop overflow-x-auto border border-blue-100">
     <table>
       <thead><tr>
@@ -936,11 +955,35 @@ function renderReports() {
   allYears.add(new Date().getFullYear());
   const years = [...allYears].sort((a,b) => b - a);
 
-  const selectedYear = state.reportYear;
-  const isAllTime = selectedYear === 'all';
+  const mode = state.reportMode;
+  const selectedYear = state.reportYear === 'all' ? new Date().getFullYear() : state.reportYear;
+  const selectedMonth = state.reportMonth;
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-  const yearPayments = isAllTime ? state.payments : state.payments.filter(p => new Date(p.payment_date).getFullYear() === selectedYear);
-  const yearExpenses = isAllTime ? state.expenses : state.expenses.filter(e => new Date(e.expense_date).getFullYear() === selectedYear);
+  // IMPORTANT: filtering always uses the date the payment/expense was actually
+  // recorded (payment_date / expense_date) — never period_from/period_to,
+  // which only describe what the payment covers, not when it was received.
+  let yearPayments, yearExpenses, periodLabel;
+
+  if (mode === 'all') {
+    yearPayments = state.payments;
+    yearExpenses = state.expenses;
+    periodLabel = 'All Time';
+  } else if (mode === 'monthly') {
+    yearPayments = state.payments.filter(p => {
+      const d = new Date(p.payment_date);
+      return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
+    });
+    yearExpenses = state.expenses.filter(e => {
+      const d = new Date(e.expense_date);
+      return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
+    });
+    periodLabel = `${monthNames[selectedMonth]} ${selectedYear}`;
+  } else {
+    yearPayments = state.payments.filter(p => new Date(p.payment_date).getFullYear() === selectedYear);
+    yearExpenses = state.expenses.filter(e => new Date(e.expense_date).getFullYear() === selectedYear);
+    periodLabel = `Year ${selectedYear}`;
+  }
 
   const totalIncome = yearPayments.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
   const totalExpense = yearExpenses.reduce((s,e)=>s+Number(e.amount),0);
@@ -959,12 +1002,22 @@ function renderReports() {
   return `
   <div class="flex flex-wrap justify-between items-center gap-3 mb-6 no-print">
     <h1 class="text-xl font-bold text-slate-800">📈 Financial Report</h1>
-    <div class="flex items-center gap-2">
-      <label class="text-xs font-medium text-slate-600">Year:</label>
-      <select id="report-year-select" class="border border-violet-200 rounded-lg px-3 py-2 text-sm">
-        <option value="all" ${isAllTime?'selected':''}>All Time</option>
-        ${years.map(y => `<option value="${y}" ${selectedYear===y?'selected':''}>${y}</option>`).join('')}
+    <div class="flex flex-wrap items-center gap-2">
+      <select id="report-mode-select" class="border border-violet-200 rounded-lg px-3 py-2 text-sm">
+        <option value="monthly" ${mode==='monthly'?'selected':''}>Monthly</option>
+        <option value="yearly" ${mode==='yearly'?'selected':''}>Yearly</option>
+        <option value="all" ${mode==='all'?'selected':''}>All Time</option>
       </select>
+      ${mode !== 'all' ? `
+        <select id="report-year-select" class="border border-violet-200 rounded-lg px-3 py-2 text-sm">
+          ${years.map(y => `<option value="${y}" ${selectedYear===y?'selected':''}>${y}</option>`).join('')}
+        </select>
+      ` : ''}
+      ${mode === 'monthly' ? `
+        <select id="report-month-select" class="border border-violet-200 rounded-lg px-3 py-2 text-sm">
+          ${monthNames.map((m,i) => `<option value="${i}" ${selectedMonth===i?'selected':''}>${m}</option>`).join('')}
+        </select>
+      ` : ''}
       <button id="print-financial-report" class="text-sm bg-violet-100 hover:bg-violet-200 text-violet-700 px-3 py-2 rounded-lg font-medium">🖨️ Print / PDF</button>
     </div>
   </div>
@@ -972,7 +1025,7 @@ function renderReports() {
     <div class="text-center border-b pb-4">
       <h2 class="font-bold text-lg">Maagay 1 Phase 1-B Homeowners Association Inc.</h2>
       <p class="text-sm text-slate-500">Statement of Income, Expenses &amp; Balance</p>
-      <p class="text-xs text-slate-400">${isAllTime ? 'All Time' : `Year ${selectedYear}`} &middot; Printed ${fmtDate(new Date())}</p>
+      <p class="text-xs text-slate-400">${periodLabel} &middot; Based on date received &middot; Printed ${fmtDate(new Date())}</p>
     </div>
 
     <div class="grid grid-cols-3 gap-4">
@@ -1279,6 +1332,16 @@ function attachHandlers() {
   if (sidebarOverlay) sidebarOverlay.onclick = () => setState({ mobileSidebarOpen: false });
 
   // ---- HOMEOWNERS ----
+  const homeownerSearch = document.getElementById('homeowner-search');
+  if (homeownerSearch) {
+    homeownerSearch.oninput = () => {
+      const cursorPos = homeownerSearch.selectionStart;
+      setState({ homeownerSearch: homeownerSearch.value });
+      const refreshed = document.getElementById('homeowner-search');
+      if (refreshed) { refreshed.focus(); refreshed.setSelectionRange(cursorPos, cursorPos); }
+    };
+  }
+
   document.querySelectorAll('[data-sort]').forEach(btn => {
     btn.onclick = () => {
       const field = btn.dataset.sort;
@@ -1650,6 +1713,16 @@ function attachHandlers() {
     };
   }
 
+  // ---- REPORTS: period selectors ----
+  const reportModeSelect = document.getElementById('report-mode-select');
+  if (reportModeSelect) reportModeSelect.onchange = () => setState({ reportMode: reportModeSelect.value });
+
+  const reportYearSelect = document.getElementById('report-year-select');
+  if (reportYearSelect) reportYearSelect.onchange = () => setState({ reportYear: parseInt(reportYearSelect.value) });
+
+  const reportMonthSelect = document.getElementById('report-month-select');
+  if (reportMonthSelect) reportMonthSelect.onchange = () => setState({ reportMonth: parseInt(reportMonthSelect.value) });
+
   // ---- REPORTS: member search/select ----
   const reportMemberSearch = document.getElementById('report-member-search');
   if (reportMemberSearch) {
@@ -1736,45 +1809,36 @@ function attachHandlers() {
   // ---- EMAIL BLAST ----
   const emailForm = document.getElementById('email-form');
   if (emailForm) {
-    emailForm.onsubmit = async (e) => {
+    emailForm.onsubmit = (e) => {
       e.preventDefault();
       const recipientMode = document.getElementById('email-recipients').value;
       const subject = document.getElementById('email-subject').value.trim();
       const body = document.getElementById('email-body').value.trim();
       const recipients = state.homeowners
-        .filter(h => recipientMode === 'everyone' || h.status === 'active')
+        .filter(h => (recipientMode === 'everyone' || h.status === 'active') && h.email)
         .map(h => h.email);
 
-      if (recipients.length === 0) return toast('No recipients found.', true);
+      if (recipients.length === 0) return toast('No homeowners with an email on file match this filter.', true);
 
-      const sendBtn = document.getElementById('email-send-btn');
-      sendBtn.disabled = true;
-      sendBtn.textContent = 'Sending...';
-
-      try {
-        const resp = await fetch(EDGE_FUNCTION_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({ subject, body, recipients })
-        });
-        const result = await resp.json();
-        if (!resp.ok) throw new Error(result.error || 'Send failed');
-
-        await sb.from('email_blasts').insert({
-          subject, body, recipient_count: recipients.length, sent_by: state.currentUser.id
-        });
-
-        toast(`Sent to ${recipients.length} homeowner(s)`);
-        emailForm.reset();
-      } catch (err) {
-        toast('Send failed: ' + err.message, true);
-      } finally {
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send Announcement';
+      // mailto: links have a practical length limit (~1800-2000 chars across
+      // browsers). Batch recipients into multiple BCC groups so nothing gets
+      // silently dropped for large lists.
+      const BATCH_SIZE = 40;
+      const batches = [];
+      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+        batches.push(recipients.slice(i, i + BATCH_SIZE));
       }
+
+      batches.forEach((batch, i) => {
+        const bcc = batch.join(',');
+        const mailtoUrl = `mailto:?bcc=${encodeURIComponent(bcc)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        // Stagger window opens slightly so browsers don't block them as popups
+        setTimeout(() => window.open(mailtoUrl, '_blank'), i * 400);
+      });
+
+      toast(batches.length > 1
+        ? `Opening ${batches.length} Gmail windows (${recipients.length} recipients total, batched by ${BATCH_SIZE}).`
+        : `Opening Gmail with ${recipients.length} recipient(s) BCC'd.`);
     };
   }
 }
@@ -1840,7 +1904,16 @@ function openExpenseModal(ex) {
 // =====================================================================
 function printMasterlist(includeDob, includeIncome) {
   const sort = state.homeownerSort;
+  const q = state.homeownerSearch.trim().toLowerCase();
   let rows = [...state.homeowners];
+  if (q) {
+    rows = rows.filter(h =>
+      (h.name||'').toLowerCase().includes(q) ||
+      (h.block||'').toLowerCase().includes(q) ||
+      (h.lot||'').toLowerCase().includes(q) ||
+      (h.email||'').toLowerCase().includes(q)
+    );
+  }
   if (sort.field) {
     rows.sort((a, b) => {
       let av, bv;
