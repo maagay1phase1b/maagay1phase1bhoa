@@ -1048,7 +1048,7 @@ function renderReports() {
     </div>
   </div>
 
-  ${renderDuesGridSection(years)}
+  ${renderDuesGridSection()}
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
     <div class="bg-white rounded-xl shadow card-pop p-5 border border-violet-100">
@@ -1090,13 +1090,67 @@ function renderReports() {
   </div>`;
 }
 
-function renderDuesGridSection(years) {
+function allocateDuesPaymentByYear(payment, monthlyRate) {
+  // Spreads a dues payment's amount across the years it covers, based on
+  // period_from/period_to (the coverage range), not just payment_date.
+  // Each covered month is assigned `monthlyRate` worth of the payment,
+  // landing in whichever year that month falls in. If period_from/period_to
+  // aren't set, the full amount is credited to the year of payment_date
+  // (a single, undated payment — nothing to spread).
+  const allocation = {};
+  if (!payment.period_from && !payment.period_to) {
+    const y = new Date(payment.payment_date).getFullYear();
+    allocation[y] = Number(payment.amount);
+    return allocation;
+  }
+
+  const from = new Date(payment.period_from || payment.period_to);
+  const to = new Date(payment.period_to || payment.period_from);
+  const months = [];
+  let cursor = new Date(from.getFullYear(), from.getMonth(), 1);
+  const end = new Date(to.getFullYear(), to.getMonth(), 1);
+  while (cursor <= end) {
+    months.push(cursor.getFullYear());
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  if (months.length === 0) {
+    const y = new Date(payment.payment_date).getFullYear();
+    allocation[y] = Number(payment.amount);
+    return allocation;
+  }
+
+  // Distribute the actual amount paid, in monthlyRate-sized chunks per
+  // covered month, in chronological order — so if amount covers fewer
+  // months than the range nominally spans, the earliest months get
+  // credited first (partial payments still land sensibly).
+  let remaining = Number(payment.amount);
+  months.forEach(y => {
+    if (remaining <= 0) return;
+    const chunk = Math.min(monthlyRate, remaining);
+    allocation[y] = (allocation[y] || 0) + chunk;
+    remaining -= chunk;
+  });
+  // Any leftover beyond what the month-count could absorb (e.g. amount paid
+  // exceeds rate * months covered) gets added to the final covered year.
+  if (remaining > 0) {
+    const lastYear = months[months.length - 1];
+    allocation[lastYear] = (allocation[lastYear] || 0) + remaining;
+  }
+  return allocation;
+}
+
+function renderDuesGridSection() {
+  const years = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
   const target = state.duesAnnualTarget;
+  const monthlyRate = target / 12;
   const duesType = state.paymentTypes.find(t => (t.name||'').toLowerCase().includes('monthly dues'));
   const activeHomeowners = state.homeowners.filter(h => h.status === 'active');
 
-  // Sum monthly dues paid per homeowner per year, based on payment_date (date
-  // actually received), never period_from/period_to.
+  // Sum monthly dues paid per homeowner per year, spreading each payment
+  // across the year(s) it actually covers (period_from -> period_to) rather
+  // than dumping it all into the year it was received. E.g. a payment dated
+  // Jan 2020 covering Jan 2020-Dec 2021 for 1800 splits into 900 for 2020
+  // and 900 for 2021.
   const totals = {};
   activeHomeowners.forEach(h => { totals[h.id] = {}; years.forEach(y => totals[h.id][y] = 0); });
 
@@ -1104,10 +1158,14 @@ function renderDuesGridSection(years) {
     if (p.is_voided) return;
     if (duesType && p.payment_type_id !== duesType.id) return;
     if (!duesType && (p.payment_types?.name||'').toLowerCase().indexOf('monthly dues') === -1) return;
-    const y = new Date(p.payment_date).getFullYear();
-    if (totals[p.homeowner_id] && totals[p.homeowner_id][y] !== undefined) {
-      totals[p.homeowner_id][y] += Number(p.amount);
-    }
+    if (!totals[p.homeowner_id]) return;
+    const allocation = allocateDuesPaymentByYear(p, monthlyRate);
+    Object.entries(allocation).forEach(([y, amt]) => {
+      const year = parseInt(y);
+      if (totals[p.homeowner_id][year] !== undefined) {
+        totals[p.homeowner_id][year] += amt;
+      }
+    });
   });
 
   const cellStyle = (paid) => {
@@ -2181,12 +2239,10 @@ function printRankingReportFn() {
 }
 
 function printDuesGridFn() {
-  const allYears = new Set();
-  state.payments.forEach(p => allYears.add(new Date(p.payment_date).getFullYear()));
-  allYears.add(new Date().getFullYear());
-  const years = [...allYears].sort((a,b) => a - b);
+  const years = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
 
   const target = state.duesAnnualTarget;
+  const monthlyRate = target / 12;
   const duesType = state.paymentTypes.find(t => (t.name||'').toLowerCase().includes('monthly dues'));
   const activeHomeowners = state.homeowners.filter(h => h.status === 'active');
 
@@ -2196,10 +2252,14 @@ function printDuesGridFn() {
     if (p.is_voided) return;
     if (duesType && p.payment_type_id !== duesType.id) return;
     if (!duesType && (p.payment_types?.name||'').toLowerCase().indexOf('monthly dues') === -1) return;
-    const y = new Date(p.payment_date).getFullYear();
-    if (totals[p.homeowner_id] && totals[p.homeowner_id][y] !== undefined) {
-      totals[p.homeowner_id][y] += Number(p.amount);
-    }
+    if (!totals[p.homeowner_id]) return;
+    const allocation = allocateDuesPaymentByYear(p, monthlyRate);
+    Object.entries(allocation).forEach(([y, amt]) => {
+      const year = parseInt(y);
+      if (totals[p.homeowner_id][year] !== undefined) {
+        totals[p.homeowner_id][year] += amt;
+      }
+    });
   });
 
   const cellStyle = (paid) => {
