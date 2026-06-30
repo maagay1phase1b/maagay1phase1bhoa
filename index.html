@@ -26,10 +26,23 @@
   .card-pop:hover { transform: translateY(-2px); box-shadow: 0 8px 20px -4px rgba(0,0,0,0.08); }
   .sidebar-mobile { transition: transform 0.25s ease; }
   @media (max-width: 767px) {
-    .sidebar-mobile { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); z-index: 50; width: 80vw; max-width: 280px; }
+    .sidebar-mobile {
+      position: fixed !important;
+      top: 0; left: 0;
+      height: 100vh;
+      transform: translateX(-100%);
+      z-index: 50;
+      width: 80vw;
+      max-width: 280px;
+    }
     .sidebar-mobile.open { transform: translateX(0); }
-    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; }
     .sidebar-overlay.open { display: block; }
+    .mobile-topbar { display: flex !important; }
+  }
+  @media (min-width: 768px) {
+    .mobile-topbar { display: none !important; }
+    .sidebar-overlay { display: none !important; }
   }
 </style>
 </head>
