@@ -1111,51 +1111,36 @@ function renderReports() {
 }
 
 function allocateDuesPaymentByYear(payment, monthlyRate) {
-  // Spreads a dues payment's amount across the years it covers, based on
-  // period_from/period_to (the coverage range), not just payment_date.
-  // Each covered month is assigned `monthlyRate` worth of the payment,
-  // landing in whichever year that month falls in. If period_from/period_to
-  // aren't set, the full amount is credited to the year of payment_date
-  // (a single, undated payment — nothing to spread).
-  const allocation = {};
+  // If no coverage period set, credit the full amount to the payment_date year.
   if (!payment.period_from && !payment.period_to) {
     const y = new Date(payment.payment_date).getFullYear();
-    allocation[y] = Number(payment.amount);
-    return allocation;
+    return { [y]: Number(payment.amount) };
   }
 
-  const from = new Date(payment.period_from || payment.period_to);
-  const to = new Date(payment.period_to || payment.period_from);
+  // Build list of months covered (inclusive).
+  const from = new Date((payment.period_from || payment.period_to).slice(0,7) + '-01');
+  const to   = new Date((payment.period_to   || payment.period_from).slice(0,7) + '-01');
   const months = [];
-  let cursor = new Date(from.getFullYear(), from.getMonth(), 1);
-  const end = new Date(to.getFullYear(), to.getMonth(), 1);
-  while (cursor <= end) {
-    months.push(cursor.getFullYear());
-    cursor.setMonth(cursor.getMonth() + 1);
+  const cur = new Date(from);
+  while (cur <= to) {
+    months.push(cur.getFullYear());
+    cur.setMonth(cur.getMonth() + 1);
   }
   if (months.length === 0) {
     const y = new Date(payment.payment_date).getFullYear();
-    allocation[y] = Number(payment.amount);
-    return allocation;
+    return { [y]: Number(payment.amount) };
   }
 
-  // Distribute the actual amount paid, in monthlyRate-sized chunks per
-  // covered month, in chronological order — so if amount covers fewer
-  // months than the range nominally spans, the earliest months get
-  // credited first (partial payments still land sensibly).
-  let remaining = Number(payment.amount);
+  // Spread amount across covered months: each month gets an equal share
+  // (total amount ÷ number of months), regardless of monthlyRate.
+  // This avoids distortion when the logged amount doesn't match exactly
+  // monthlyRate × months (e.g. advance payments, partial payments, or
+  // periods where dues changed). Each year gets the sum of its months' shares.
+  const sharePerMonth = Number(payment.amount) / months.length;
+  const allocation = {};
   months.forEach(y => {
-    if (remaining <= 0) return;
-    const chunk = Math.min(monthlyRate, remaining);
-    allocation[y] = (allocation[y] || 0) + chunk;
-    remaining -= chunk;
+    allocation[y] = (allocation[y] || 0) + sharePerMonth;
   });
-  // Any leftover beyond what the month-count could absorb (e.g. amount paid
-  // exceeds rate * months covered) gets added to the final covered year.
-  if (remaining > 0) {
-    const lastYear = months[months.length - 1];
-    allocation[lastYear] = (allocation[lastYear] || 0) + remaining;
-  }
   return allocation;
 }
 
@@ -1188,19 +1173,23 @@ function renderDuesGridSection() {
     });
   });
 
+  const fmtDuesCell = (paid) => paid > 0
+    ? Number(paid).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '';
+
   const cellStyle = (paid) => {
-    if (paid <= 0) return 'background:#fee2e2;color:#991b1b;';
+    if (paid <= 0) return 'background:#fff5f5;';
     if (paid >= target) return 'background:#dcfce7;color:#166534;';
     return 'background:#fef9c3;color:#854d0e;';
   };
 
   const rows = activeHomeowners.map(h => `
     <tr>
-      <td style="text-align:left;font-weight:500;">${escapeHtml(h.name)}</td>
-      <td style="text-align:left;">${escapeHtml(h.block||'')}/${escapeHtml(h.lot||'')}</td>
-      ${years.map(y => `<td style="${cellStyle(totals[h.id][y])}">${peso(totals[h.id][y])}</td>`).join('')}
+      <td style="text-align:left;font-weight:500;padding:4px 8px;border:1px solid #e2e8f0;white-space:nowrap;position:sticky;left:0;background:#fff;z-index:1;">${escapeHtml(h.name)}</td>
+      <td style="text-align:left;padding:4px 8px;border:1px solid #e2e8f0;">${escapeHtml(h.block||'')}/${escapeHtml(h.lot||'')}</td>
+      ${years.map(y => `<td style="${cellStyle(totals[h.id][y])}padding:4px 8px;border:1px solid #e2e8f0;text-align:center;">${fmtDuesCell(totals[h.id][y])}</td>`).join('')}
     </tr>
-  `).join('') || `<tr><td colspan="${years.length+2}" class="text-center text-slate-400">No active homeowners</td></tr>`;
+  `).join('') || `<tr><td colspan="${years.length+2}" style="text-align:center;color:#94a3b8;padding:12px;">No active homeowners</td></tr>`;
 
   return `
   <div class="bg-white rounded-xl shadow card-pop p-5 border border-emerald-100 mt-6" id="dues-grid-area">
@@ -2280,17 +2269,20 @@ function printDuesGridFn() {
     });
   });
 
-  const cellStyle = (paid) => {
-    if (paid <= 0) return 'background:#fee2e2;color:#991b1b;';
+  const cellStyleP = (paid) => {
+    if (paid <= 0) return 'background:#fff5f5;';
     if (paid >= target) return 'background:#dcfce7;color:#166534;';
     return 'background:#fef9c3;color:#854d0e;';
   };
+  const fmtCell = (paid) => paid > 0
+    ? Number(paid).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '';
 
   const rows = activeHomeowners.map(h => `
     <tr>
       <td>${escapeHtml(h.name)}</td>
       <td>${escapeHtml(h.block||'')}/${escapeHtml(h.lot||'')}</td>
-      ${years.map(y => `<td style="${cellStyle(totals[h.id][y])}text-align:center;">${peso(totals[h.id][y])}</td>`).join('')}
+      ${years.map(y => `<td style="${cellStyleP(totals[h.id][y])}text-align:center;">${fmtCell(totals[h.id][y])}</td>`).join('')}
     </tr>
   `).join('');
 
