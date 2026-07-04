@@ -24,44 +24,33 @@
   .tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-right: 10px; flex-shrink: 0; border-radius: 6px; }
   .card-pop { transition: transform 0.15s ease, box-shadow 0.15s ease; }
   .card-pop:hover { transform: translateY(-2px); box-shadow: 0 8px 20px -4px rgba(0,0,0,0.08); }
-  .sidebar-mobile { transition: transform 0.25s ease; }
-  .mobile-topbar { display: none; }
-  .mobile-nav { display: none; }
-  @media (max-width: 767px) {
-    .desktop-sidebar { display: none !important; }
-    .mobile-topbar { display: flex !important; }
-    .mobile-nav { display: flex !important; }
-    .main-content { padding: 12px !important; }
-  }
-  @media (min-width: 768px) {
-    .mobile-topbar { display: none !important; }
-    .mobile-nav { display: none !important; }
-    .desktop-sidebar { display: flex !important; }
-  }
-  .mobile-nav-btn {
-    flex: 1;
+  .card-pop { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .card-pop:hover { transform: translateY(-2px); box-shadow: 0 8px 20px -4px rgba(0,0,0,0.08); }
+  .top-nav-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 6px 2px;
-    font-size: 9px;
+    padding: 6px 10px;
+    font-size: 10px;
     border: none;
     background: transparent;
     cursor: pointer;
-    color: #64748b;
-    border-top: 2px solid transparent;
+    color: rgba(255,255,255,0.7);
+    border-bottom: 3px solid transparent;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    gap: 2px;
+    min-width: 60px;
+    transition: all 0.15s ease;
   }
-  .mobile-nav-btn.active {
-    color: #064e3b;
-    border-top: 2px solid #10b981;
-    background: #f0fdf4;
-    font-weight: 700;
+  .top-nav-btn:hover { color: #ffffff; background: rgba(255,255,255,0.08); }
+  .top-nav-btn.active { color: #ffffff; border-bottom: 3px solid #34d399; background: rgba(255,255,255,0.12); font-weight: 700; }
+  .top-nav-icon { font-size: 18px; line-height: 1; }
+  @media (max-width: 600px) {
+    .top-nav-btn { padding: 5px 4px; font-size: 9px; min-width: 44px; }
+    .top-nav-icon { font-size: 16px; }
+    .topbar-title { display: none; }
   }
-  .mobile-nav-btn .nav-icon { font-size: 18px; margin-bottom: 2px; }
 </style>
 </head>
 <body class="app-bg min-h-screen">
@@ -1475,21 +1464,6 @@ function attachHandlers() {
   document.querySelectorAll('[data-nav]').forEach(btn => {
     btn.onclick = () => setState({ view: btn.dataset.nav, mobileSidebarOpen: false });
   });
-
-  // ---- MOBILE TOP BAR BUTTONS ----
-  const logoutBtnMobile = document.getElementById('logout-btn-mobile');
-  if (logoutBtnMobile) logoutBtnMobile.onclick = logout;
-
-  const changeCredsBtnMobile = document.getElementById('change-creds-btn-mobile');
-  if (changeCredsBtnMobile) changeCredsBtnMobile.onclick = () => {
-    document.getElementById('creds-modal').classList.remove('hidden');
-  };
-
-  const manageAdminsBtnMobile = document.getElementById('manage-admins-btn-mobile');
-  if (manageAdminsBtnMobile) manageAdminsBtnMobile.onclick = async () => {
-    await loadAdminUsers();
-    document.getElementById('admins-modal').classList.remove('hidden');
-  };
 
   // ---- HOMEOWNERS ----
   const homeownerSearch = document.getElementById('homeowner-search');
