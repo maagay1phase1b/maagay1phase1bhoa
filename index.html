@@ -1110,19 +1110,58 @@ function renderReports() {
   </div>`;
 }
 
-function allocateDuesPaymentByYear(payment) {
-  // Always use payment_date (the actual date the payment was received/logged),
-  // never period_from/period_to. The full amount goes to that year — no splitting.
-  const y = new Date(payment.payment_date).getFullYear();
-  return { [y]: Number(payment.amount) };
+function allocateDuesPaymentByYear(payment, monthlyRate) {
+  // Spread payment across years based on period_from → period_to coverage.
+  // Each covered month gets monthlyRate (e.g. ₱75), summed per year.
+  // If no period set, the full amount goes to the payment_date year.
+  //
+  // Example: OR#1129, ₱2,250, Jan 2020 – Jun 2022 (30 months × ₱75):
+  //   2020 → 12 months × ₱75 = ₱900 ✅
+  //   2021 → 12 months × ₱75 = ₱900 ✅
+  //   2022 → 6 months  × ₱75 = ₱450 🟡
+  //
+  // Then OR#1131, ₱1,350, Jul 2022 – Dec 2023 (18 months × ₱75):
+  //   2022 → 6 months  × ₱75 = ₱450 → total 2022 = ₱900 ✅
+  //   2023 → 12 months × ₱75 = ₱900 ✅
+
+  if (!payment.period_from && !payment.period_to) {
+    const y = new Date(payment.payment_date).getFullYear();
+    return { [y]: Number(payment.amount) };
+  }
+
+  const fromStr = (payment.period_from || payment.period_to).slice(0, 7);
+  const toStr   = (payment.period_to   || payment.period_from).slice(0, 7);
+  const from = new Date(fromStr + '-01');
+  const to   = new Date(toStr   + '-01');
+
+  const allocation = {};
+  const cur = new Date(from);
+  let remaining = Number(payment.amount);
+
+  while (cur <= to && remaining > 0) {
+    const y = cur.getFullYear();
+    const chunk = Math.min(monthlyRate, remaining);
+    allocation[y] = (allocation[y] || 0) + chunk;
+    remaining -= chunk;
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  // If any amount is left over (payment > months × monthlyRate),
+  // stack it onto the last covered year.
+  if (remaining > 0) {
+    const lastYear = to.getFullYear();
+    allocation[lastYear] = (allocation[lastYear] || 0) + remaining;
+  }
+
+  return allocation;
 }
 
 function renderDuesGridSection() {
   const years = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
   const target = state.duesAnnualTarget;
+  const monthlyRate = target / 12;
   const duesType = state.paymentTypes.find(t => (t.name||'').toLowerCase().includes('monthly dues'));
 
-  // Sort alphabetically by name
   const activeHomeowners = state.homeowners
     .filter(h => h.status === 'active')
     .sort((a,b) => (a.name||'').localeCompare(b.name||''));
@@ -1135,7 +1174,7 @@ function renderDuesGridSection() {
     if (duesType && p.payment_type_id !== duesType.id) return;
     if (!duesType && !(p.payment_types?.name||'').toLowerCase().includes('monthly dues')) return;
     if (!totals[p.homeowner_id]) return;
-    const allocation = allocateDuesPaymentByYear(p);
+    const allocation = allocateDuesPaymentByYear(p, monthlyRate);
     Object.entries(allocation).forEach(([y, amt]) => {
       const year = parseInt(y);
       if (totals[p.homeowner_id][year] !== undefined) {
@@ -2219,9 +2258,9 @@ function printRankingReportFn() {
 function printDuesGridFn() {
   const years = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
   const target = state.duesAnnualTarget;
+  const monthlyRate = target / 12;
   const duesType = state.paymentTypes.find(t => (t.name||'').toLowerCase().includes('monthly dues'));
 
-  // Alphabetical sort
   const activeHomeowners = state.homeowners
     .filter(h => h.status === 'active')
     .sort((a,b) => (a.name||'').localeCompare(b.name||''));
@@ -2234,7 +2273,7 @@ function printDuesGridFn() {
     if (duesType && p.payment_type_id !== duesType.id) return;
     if (!duesType && !(p.payment_types?.name||'').toLowerCase().includes('monthly dues')) return;
     if (!totals[p.homeowner_id]) return;
-    const allocation = allocateDuesPaymentByYear(p);
+    const allocation = allocateDuesPaymentByYear(p, monthlyRate);
     Object.entries(allocation).forEach(([y, amt]) => {
       const year = parseInt(y);
       if (totals[p.homeowner_id][year] !== undefined) {
