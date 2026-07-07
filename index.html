@@ -105,7 +105,7 @@ async function loadAdminUsers(){
   if(error){toast('Could not load admin accounts: '+error.message,true);return;}
   setState({adminUsers:data||[]});
 }
-function balanceFor(id){return state.payments.filter(p=>p.homeowner_id===id&&!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);}
+function balanceFor(id){return state.payments.filter(p=>p.homeowner_id===id&&!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);}
 function isDuesUpdated(id){
   const ago=new Date();ago.setMonth(ago.getMonth()-3);
   return state.payments.some(p=>{
@@ -228,7 +228,7 @@ function renderView(){
 let incChart=null,expChart=null;
 function renderDashboard(){
   const yr=new Date().getFullYear();
-  const ti=state.payments.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+  const ti=state.payments.filter(p=>!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);
   const te=state.expenses.reduce((s,e)=>s+Number(e.amount),0);
   const bal=ti-te;
   const am=state.homeowners.filter(h=>h.status==='active').length;
@@ -515,10 +515,10 @@ function renderReports(){
   if(mode==='all'){yPay=state.payments;yExp=state.expenses;periodLabel='All Time';}
   else if(mode==='monthly'){yPay=state.payments.filter(p=>{const d=new Date(p.payment_date);return d.getFullYear()===selYear&&d.getMonth()===selMonth;});yExp=state.expenses.filter(e=>{const d=new Date(e.expense_date);return d.getFullYear()===selYear&&d.getMonth()===selMonth;});periodLabel=`${mNames[selMonth]} ${selYear}`;}
   else{yPay=state.payments.filter(p=>new Date(p.payment_date).getFullYear()===selYear);yExp=state.expenses.filter(e=>new Date(e.expense_date).getFullYear()===selYear);periodLabel=`Year ${selYear}`;}
-  const ti=yPay.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+  const ti=yPay.filter(p=>!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);
   const te=yExp.reduce((s,e)=>s+Number(e.amount),0);
   const net=ti-te;
-  const ibt=state.paymentTypes.map(t=>({name:t.name,total:yPay.filter(p=>p.payment_type_id===t.id&&!p.is_voided).reduce((s,p)=>s+Number(p.amount),0)})).filter(x=>x.total>0);
+  const ibt=state.paymentTypes.map(t=>({name:t.name,total:yPay.filter(p=>p.payment_type_id===t.id&&!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0)})).filter(x=>x.total>0);
   const ebc=state.expenseCategories.map(c=>({name:c.name,total:yExp.filter(e=>e.category_id===c.id).reduce((s,e)=>s+Number(e.amount),0)})).filter(x=>x.total>0);
   return`<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px;" class="no-print">
   <h1 style="font-weight:700;font-size:20px;">📈 Financial Report</h1>
@@ -979,7 +979,7 @@ function printLedger(from,to){
   if(from)rows=rows.filter(p=>p.payment_date>=from);
   if(to)rows=rows.filter(p=>p.payment_date<=to);
   rows.sort((a,b)=>new Date(a.payment_date)-new Date(b.payment_date));
-  const total=rows.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+  const total=rows.filter(p=>!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);
   const label=from||to?`${from?fmtDate(from):'Beginning'} – ${to?fmtDate(to):'Present'}`:'All Records';
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Ledger</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:14px;}th,td{border:1px solid #cbd5e1;padding:7px;font-size:12px;}th{background:#f1f5f9;}</style></head><body>
@@ -1008,7 +1008,7 @@ function printExpenses(period){
 }
 function printMemberStatements(ids){
   const members=state.homeowners.filter(h=>ids.includes(h.id));
-  const sections=members.map(ho=>{const pays=state.payments.filter(p=>p.homeowner_id===ho.id);const total=pays.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);return`<div style="margin-bottom:30px;"><p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')}</p><table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')||`<tr><td colspan="6">No payments.</td></tr>`}</tbody></table><p style="font-weight:bold;">Total: ${peso(total)}</p></div>`;}).join('<hr>');
+  const sections=members.map(ho=>{const pays=state.payments.filter(p=>p.homeowner_id===ho.id);const total=pays.filter(p=>!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);return`<div style="margin-bottom:30px;"><p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')}</p><table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')||`<tr><td colspan="6">No payments.</td></tr>`}</tbody></table><p style="font-weight:bold;">Total: ${peso(total)}</p></div>`;}).join('<hr>');
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Statements</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #cbd5e1;padding:6px;font-size:12px;}th{background:#f1f5f9;}</style></head><body><h2>Maagay 1 Phase 1-B HOA — Member Statements</h2>${sections}<p style="font-size:10px;color:#94a3b8;">Generated ${fmtDate(new Date())}</p></body></html>`);
   w.document.close();setTimeout(()=>w.print(),300);
@@ -1028,7 +1028,7 @@ function printTypeReport(ids){
 }
 function printRankingReport(){
   const active=state.homeowners.filter(h=>h.status==='active');
-  const sections=state.paymentTypes.map(t=>{const ranked=active.map(h=>({name:h.name,block:h.block,lot:h.lot,total:state.payments.filter(p=>p.homeowner_id===h.id&&p.payment_type_id===t.id&&!p.is_voided).reduce((s,p)=>s+Number(p.amount),0)})).sort((a,b)=>b.total-a.total);return`<h3 style="margin-top:20px;font-size:13px;">${esc(t.name)}</h3><table><thead><tr><th>#</th><th>Homeowner</th><th>Blk/Lot</th><th>Total Paid</th></tr></thead><tbody>${ranked.map((r,i)=>`<tr style="${r.total===0?'color:#dc2626;':''}"><td>${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.block||'')}/${esc(r.lot||'')}</td><td>${r.total===0?'NO PAYMENT':peso(r.total)}</td></tr>`).join('')}</tbody></table>`;}).join('');
+  const sections=state.paymentTypes.map(t=>{const ranked=active.map(h=>({name:h.name,block:h.block,lot:h.lot,total:state.payments.filter(p=>p.homeowner_id===h.id&&p.payment_type_id===t.id&&!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0),waived:state.payments.some(p=>p.homeowner_id===h.id&&p.payment_type_id===t.id&&!p.is_voided&&p.is_waived)})).sort((a,b)=>b.total-a.total);    return`<h3 style="margin-top:20px;font-size:13px;">${esc(t.name)}</h3><table><thead><tr><th>#</th><th>Homeowner</th><th>Blk/Lot</th><th>Total Paid (Cash)</th><th>Notes</th></tr></thead><tbody>${ranked.map((r,i)=>`<tr style="${r.total===0&&!r.waived?'color:#dc2626;':''}"><td>${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.block||'')}/${esc(r.lot||'')}</td><td>${r.total===0&&!r.waived?'NO PAYMENT':peso(r.total)}</td><td>${r.waived?'<span style="font-size:10px;background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:10px;">WAIVED</span>':''}</td></tr>`).join('')}</tbody></table>`;}).join('');
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Ranking</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:8px;}th,td{border:1px solid #cbd5e1;padding:6px;font-size:12px;}th{background:#f1f5f9;}</style></head><body>
   <h2>Maagay 1 Phase 1-B HOA — Payment Ranking</h2>
@@ -1043,7 +1043,16 @@ function printDuesGrid(){
   const duesType=state.paymentTypes.find(t=>(t.name||'').toLowerCase().includes('monthly dues'));
   const active=state.homeowners.filter(h=>h.status==='active').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const totals={};active.forEach(h=>{totals[h.id]={};gridYears.forEach(y=>totals[h.id][y]=0);});
-  state.payments.forEach(p=>{if(p.is_voided)return;if(duesType&&p.payment_type_id!==duesType.id)return;if(!duesType&&!(p.payment_types?.name||'').toLowerCase().includes('monthly dues'))return;if(!totals[p.homeowner_id])return;const al=allocateDues(p,mr);Object.entries(al).forEach(([y,a])=>{const yr=parseInt(y);if(totals[p.homeowner_id][yr]!==undefined)totals[p.homeowner_id][yr]+=a;});});
+  state.payments.forEach(p=>{
+    if(p.is_voided)return; // voided = doesn't count at all
+    // waived counts toward coverage in the dues grid (period is covered)
+    // but is excluded from cash income in financial reports
+    if(duesType&&p.payment_type_id!==duesType.id)return;
+    if(!duesType&&!(p.payment_types?.name||'').toLowerCase().includes('monthly dues'))return;
+    if(!totals[p.homeowner_id])return;
+    const al=allocateDues(p,mr);
+    Object.entries(al).forEach(([y,a])=>{const yr=parseInt(y);if(totals[p.homeowner_id][yr]!==undefined)totals[p.homeowner_id][yr]+=a;});
+  });
   const cs=paid=>paid<=0?'background:#fff5f5;':paid>=target?'background:#dcfce7;color:#166534;':'background:#fef9c3;color:#854d0e;';
   const fmt=paid=>paid>0?Number(paid).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
   const w=window.open('','_blank');
