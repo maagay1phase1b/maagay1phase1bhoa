@@ -105,7 +105,8 @@ async function loadAdminUsers(){
   if(error){toast('Could not load admin accounts: '+error.message,true);return;}
   setState({adminUsers:data||[]});
 }
-function balanceFor(id){return state.payments.filter(p=>p.homeowner_id===id&&!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);}
+function isValidIncome(p){ return !p.is_voided && p.is_waived !== true; }
+function balanceFor(id){return state.payments.filter(p=>p.homeowner_id===id&&isValidIncome(p)).reduce((s,p)=>s+Number(p.amount),0);}
 function isDuesUpdated(id){
   const ago=new Date();ago.setMonth(ago.getMonth()-3);
   return state.payments.some(p=>{
@@ -228,7 +229,7 @@ function renderView(){
 let incChart=null,expChart=null;
 function renderDashboard(){
   const yr=new Date().getFullYear();
-  const ti=state.payments.filter(p=>!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);
+  const ti=state.payments.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);
   const te=state.expenses.reduce((s,e)=>s+Number(e.amount),0);
   const bal=ti-te;
   const am=state.homeowners.filter(h=>h.status==='active').length;
@@ -515,10 +516,10 @@ function renderReports(){
   if(mode==='all'){yPay=state.payments;yExp=state.expenses;periodLabel='All Time';}
   else if(mode==='monthly'){yPay=state.payments.filter(p=>{const d=new Date(p.payment_date);return d.getFullYear()===selYear&&d.getMonth()===selMonth;});yExp=state.expenses.filter(e=>{const d=new Date(e.expense_date);return d.getFullYear()===selYear&&d.getMonth()===selMonth;});periodLabel=`${mNames[selMonth]} ${selYear}`;}
   else{yPay=state.payments.filter(p=>new Date(p.payment_date).getFullYear()===selYear);yExp=state.expenses.filter(e=>new Date(e.expense_date).getFullYear()===selYear);periodLabel=`Year ${selYear}`;}
-  const ti=yPay.filter(p=>!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);
+  const ti=yPay.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);
   const te=yExp.reduce((s,e)=>s+Number(e.amount),0);
   const net=ti-te;
-  const ibt=state.paymentTypes.map(t=>({name:t.name,total:yPay.filter(p=>p.payment_type_id===t.id&&!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0)})).filter(x=>x.total>0);
+  const ibt=state.paymentTypes.map(t=>({name:t.name,total:yPay.filter(p=>isValidIncome(p)&&p.payment_type_id===t.id).reduce((s,p)=>s+Number(p.amount),0)})).filter(x=>x.total>0);
   const ebc=state.expenseCategories.map(c=>({name:c.name,total:yExp.filter(e=>e.category_id===c.id).reduce((s,e)=>s+Number(e.amount),0)})).filter(x=>x.total>0);
   return`<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px;" class="no-print">
   <h1 style="font-weight:700;font-size:20px;">📈 Financial Report</h1>
