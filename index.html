@@ -159,7 +159,7 @@ function renderLogin(){
 // MEMBER VIEW
 function renderMember(){
   const ho=state.homeowners[0];
-  const bal=ho?balanceFor(ho.id):0;
+  const bal=ho?state.payments.filter(p=>p.homeowner_id===ho.id&&isValidIncome(p)).reduce((s,p)=>s+Number(p.amount),0):0;
   return`<div style="max-width:720px;margin:0 auto;padding:20px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;" class="no-print">
     <div><h1 style="font-weight:700;font-size:18px;color:#1e293b;">🏡 My Account</h1><p style="font-size:12px;color:#10b981;">Maagay 1 Phase 1-B HOA</p></div>
@@ -980,7 +980,7 @@ function printLedger(from,to){
   if(from)rows=rows.filter(p=>p.payment_date>=from);
   if(to)rows=rows.filter(p=>p.payment_date<=to);
   rows.sort((a,b)=>new Date(a.payment_date)-new Date(b.payment_date));
-  const total=rows.filter(p=>!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);
+  const total=rows.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);
   const label=from||to?`${from?fmtDate(from):'Beginning'} – ${to?fmtDate(to):'Present'}`:'All Records';
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Ledger</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:14px;}th,td{border:1px solid #cbd5e1;padding:7px;font-size:12px;}th{background:#f1f5f9;}</style></head><body>
@@ -1009,7 +1009,7 @@ function printExpenses(period){
 }
 function printMemberStatements(ids){
   const members=state.homeowners.filter(h=>ids.includes(h.id));
-  const sections=members.map(ho=>{const pays=state.payments.filter(p=>p.homeowner_id===ho.id);const total=pays.filter(p=>!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0);return`<div style="margin-bottom:30px;"><p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')}</p><table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')||`<tr><td colspan="6">No payments.</td></tr>`}</tbody></table><p style="font-weight:bold;">Total: ${peso(total)}</p></div>`;}).join('<hr>');
+  const sections=members.map(ho=>{const pays=state.payments.filter(p=>p.homeowner_id===ho.id);const total=pays.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);return`<div style="margin-bottom:30px;"><p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')}</p><table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')||`<tr><td colspan="6">No payments.</td></tr>`}</tbody></table><p style="font-weight:bold;">Total: ${peso(total)}</p></div>`;}).join('<hr>');
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Statements</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #cbd5e1;padding:6px;font-size:12px;}th{background:#f1f5f9;}</style></head><body><h2>Maagay 1 Phase 1-B HOA — Member Statements</h2>${sections}<p style="font-size:10px;color:#94a3b8;">Generated ${fmtDate(new Date())}</p></body></html>`);
   w.document.close();setTimeout(()=>w.print(),300);
@@ -1017,7 +1017,7 @@ function printMemberStatements(ids){
 function printTypeReport(ids){
   const types=state.paymentTypes.filter(t=>ids.includes(t.id));
   const rows=state.payments.filter(p=>ids.includes(p.payment_type_id)).sort((a,b)=>new Date(b.payment_date)-new Date(a.payment_date));
-  const total=rows.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+  const total=rows.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Type Report</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:14px;}th,td{border:1px solid #cbd5e1;padding:7px;font-size:12px;}th{background:#f1f5f9;}</style></head><body>
   <h2>Maagay 1 Phase 1-B HOA</h2><h3>Payment Report — ${types.map(t=>t.name).join(', ')}</h3>
