@@ -396,9 +396,10 @@ function renderPayments(){
     <td>${fmtDate(p.payment_date)}</td><td>${esc(p.homeowners?.name||'')}</td><td>${esc(p.homeowners?.block||'')}/${esc(p.homeowners?.lot||'')}</td>
     <td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td>
     <td>${fmtPeriod(p)?`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;">${fmtPeriod(p)}</span>`:'—'}</td>
-    <td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}</td>
+    <td>${peso(p.amount)}${p.is_waived?` <span style="font-size:10px;background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:20px;white-space:nowrap;">💜 WAIVED</span>`:''}</td><td>${esc(p.remarks||'')}</td>
     <td class="no-print" style="white-space:nowrap;">
       ${isSuper?`<button data-edit-payment="${p.id}" style="font-size:12px;color:#64748b;background:none;border:none;cursor:pointer;margin-right:4px;">Edit</button>
+      <button data-toggle-waived="${p.id}" style="font-size:12px;color:#7c3aed;background:none;border:none;cursor:pointer;margin-right:4px;">${p.is_waived?'Unwaive':'Waive'}</button>
       <button data-void-payment="${p.id}" style="font-size:12px;color:#d97706;background:none;border:none;cursor:pointer;margin-right:4px;">${p.is_voided?'Unvoid':'Void'}</button>
       <button data-delete-payment="${p.id}" style="font-size:12px;color:#ef4444;background:none;border:none;cursor:pointer;">Del</button>`:`<span style="font-size:11px;color:#94a3b8;">view only</span>`}
     </td>
@@ -586,10 +587,10 @@ function renderDuesGrid(years){
   const collapsed=state.duesGridCollapsed;
   return`<div class="card" style="margin-bottom:16px;" id="dues-grid-area">
   <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;${collapsed?'':'margin-bottom:12px;'}" class="no-print">
-    <button id="dues-grid-toggle" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;padding:0;text-align:left;">
+    <div id="dues-grid-toggle" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
       <span style="font-size:12px;color:#64748b;transition:transform 0.15s;transform:rotate(${collapsed?'-90deg':'0deg'});display:inline-block;">▾</span>
-      <span><h3 style="font-weight:600;font-size:14px;">🗓️ Monthly Dues — Yearly Collection Grid</h3><p style="font-size:11px;color:#64748b;">🟢 Fully paid &nbsp;🟡 Partial &nbsp;🔴 None</p></span>
-    </button>
+      <div><h3 style="font-weight:600;font-size:14px;">🗓️ Monthly Dues — Yearly Collection Grid</h3><p style="font-size:11px;color:#64748b;">🟢 Fully paid &nbsp;🟡 Partial &nbsp;🔴 None</p></div>
+    </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <label style="font-size:11px;font-weight:600;color:#64748b;">Full year (₱):</label>
       <input type="number" id="dues-target-input" value="${target}" step="1" style="width:72px;border:1px solid #d1fae5;border-radius:6px;padding:6px;font-size:13px;">
@@ -851,6 +852,7 @@ function attachHandlers(){
   if(apb)apb.onclick=()=>openPayModal();
   document.querySelectorAll('[data-edit-payment]').forEach(b=>b.onclick=()=>openPayModal(state.payments.find(p=>p.id===b.dataset.editPayment)));
   document.querySelectorAll('[data-void-payment]').forEach(b=>b.onclick=async()=>{const p=state.payments.find(x=>x.id===b.dataset.voidPayment);const{error}=await sb.from('payments').update({is_voided:!p.is_voided}).eq('id',p.id);if(error)return toast(error.message,true);toast(p.is_voided?'Unvoided':'Voided');await loadAllData();render();});
+  document.querySelectorAll('[data-toggle-waived]').forEach(b=>b.onclick=async()=>{const p=state.payments.find(x=>x.id===b.dataset.toggleWaived);const{error}=await sb.from('payments').update({is_waived:!p.is_waived}).eq('id',p.id);if(error)return toast(error.message,true);toast(p.is_waived?'Unwaived — now counted in totals':'Marked as waived — excluded from totals');await loadAllData();render();});
   document.querySelectorAll('[data-delete-payment]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete payment?'))return;const{error}=await sb.from('payments').delete().eq('id',b.dataset.deletePayment);if(error)return toast(error.message,true);toast('Deleted');await loadAllData();render();});
   const payCancel=document.getElementById('pay-cancel');
   if(payCancel)payCancel.onclick=()=>hideModal('payment-modal');
@@ -874,7 +876,7 @@ function attachHandlers(){
     const id=document.getElementById('pay-id').value;
     const pf=document.getElementById('pay-period-from').value;
     const pt=document.getElementById('pay-period-to').value;
-    const payload={homeowner_id:hoId,payment_type_id:document.getElementById('pay-type').value,or_number:orNum,amount:amt,payment_date:document.getElementById('pay-date').value,period_from:pf?pf+'-01':null,period_to:pt?pt+'-01':null,remarks:document.getElementById('pay-remarks').value.trim()};
+    const payload={homeowner_id:hoId,payment_type_id:document.getElementById('pay-type').value,or_number:orNum,amount:amt,payment_date:document.getElementById('pay-date').value,period_from:pf?pf+'-01':null,period_to:pt?pt+'-01':null,is_waived:document.getElementById('pay-is-waived').checked,remarks:document.getElementById('pay-remarks').value.trim()};
     let err;if(id){({error:err}=await sb.from('payments').update(payload).eq('id',id));}else{payload.created_by=state.currentUser.id;({error:err}=await sb.from('payments').insert(payload));}
     if(err){if(err.message.includes('duplicate')||err.message.includes('unique'))return toast('OR# already used.',true);return toast(err.message,true);}
     toast('Payment saved');hideModal('payment-modal');await loadAllData();render();
@@ -992,14 +994,14 @@ function openExpModal(ex){
 function printStatement(id){
   const ho=state.homeowners.find(h=>h.id===id);
   const pays=state.payments.filter(p=>p.homeowner_id===id);
-  const total=pays.filter(p=>!p.is_voided).reduce((s,p)=>s+Number(p.amount),0);
+  const total=pays.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Statement</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:14px;}th,td{border:1px solid #cbd5e1;padding:7px;font-size:12px;}th{background:#f1f5f9;}</style></head><body>
   <h2>Maagay 1 Phase 1-B Homeowners Association Inc.</h2>
   <h3>Statement of Account</h3>
   <p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')} · ${esc(ho.area||'-')} sqm${ho.date_of_birth?`<br>Date of Birth: ${fmtDate(ho.date_of_birth)}`:''}${ho.email?`<br>${esc(ho.email)}`:''}</p>
   <table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead>
-  <tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')}</tbody></table>
+  <tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':p.is_waived?' (WAIVED — excluded from total)':''}</td></tr>`).join('')}</tbody></table>
   <p style="margin-top:12px;font-weight:bold;">Total Paid: ${peso(total)}</p>
   <p style="font-size:10px;color:#94a3b8;margin-top:20px;">Generated ${fmtDate(new Date())}</p>
   </body></html>`);
@@ -1033,7 +1035,7 @@ function printLedger(from,to){
   w.document.write(`<html><head><title>Ledger</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:14px;}th,td{border:1px solid #cbd5e1;padding:7px;font-size:12px;}th{background:#f1f5f9;}</style></head><body>
   <h2>Maagay 1 Phase 1-B Homeowners Association Inc.</h2><h3>Payment Ledger — ${label}</h3>
   <table><thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead>
-  <tbody>${rows.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.homeowners?.name||'')}</td><td>${esc(p.homeowners?.block||'')}/${esc(p.homeowners?.lot||'')}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')||`<tr><td colspan="8" style="text-align:center;">No payments in range.</td></tr>`}</tbody></table>
+  <tbody>${rows.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.homeowners?.name||'')}</td><td>${esc(p.homeowners?.block||'')}/${esc(p.homeowners?.lot||'')}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':p.is_waived?' (WAIVED — excluded from total)':''}</td></tr>`).join('')||`<tr><td colspan="8" style="text-align:center;">No payments in range.</td></tr>`}</tbody></table>
   <p style="margin-top:12px;font-weight:bold;">Total (excl. voided): ${peso(total)}</p>
   <p style="font-size:10px;color:#94a3b8;margin-top:20px;">Generated ${fmtDate(new Date())}</p>
   </body></html>`);
@@ -1056,7 +1058,7 @@ function printExpenses(period){
 }
 function printMemberStatements(ids){
   const members=state.homeowners.filter(h=>ids.includes(h.id));
-  const sections=members.map(ho=>{const pays=state.payments.filter(p=>p.homeowner_id===ho.id);const total=pays.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);return`<div style="margin-bottom:30px;"><p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')}</p><table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':''}</td></tr>`).join('')||`<tr><td colspan="6">No payments.</td></tr>`}</tbody></table><p style="font-weight:bold;">Total: ${peso(total)}</p></div>`;}).join('<hr>');
+  const sections=members.map(ho=>{const pays=state.payments.filter(p=>p.homeowner_id===ho.id);const total=pays.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);return`<div style="margin-bottom:30px;"><p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')}</p><table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':p.is_waived?' (WAIVED — excluded from total)':''}</td></tr>`).join('')||`<tr><td colspan="6">No payments.</td></tr>`}</tbody></table><p style="font-weight:bold;">Total: ${peso(total)}</p></div>`;}).join('<hr>');
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Statements</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #cbd5e1;padding:6px;font-size:12px;}th{background:#f1f5f9;}</style></head><body><h2>Maagay 1 Phase 1-B HOA — Member Statements</h2>${sections}<p style="font-size:10px;color:#94a3b8;">Generated ${fmtDate(new Date())}</p></body></html>`);
   w.document.close();setTimeout(()=>w.print(),300);
