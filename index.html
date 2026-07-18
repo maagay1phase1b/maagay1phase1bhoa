@@ -50,6 +50,7 @@ let state={
   reportMode:'yearly',reportYear:new Date().getFullYear(),reportMonth:new Date().getMonth(),
   reportMemberSearch:'',reportSelectedMembers:[],reportSelectedTypes:[],
   duesAnnualTarget:900,mobileSidebarOpen:false,
+  certSelected:[],
 };
 
 const root=document.getElementById('app');
@@ -285,21 +286,35 @@ function renderHomeowners(){
   <div class="card no-print" style="margin-bottom:12px;">
     <input type="text" id="homeowner-search" placeholder="Search by name, block, lot, or email..." value="${esc(state.homeownerSearch)}" style="width:100%;border:1px solid #d1fae5;border-radius:8px;padding:8px 12px;font-size:13px;box-sizing:border-box;">
   </div>
+  <div class="card no-print" style="margin-bottom:12px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;background:#f5f3ff;border:1px solid #ddd6fe;">
+    <div>
+      <h3 style="font-weight:600;font-size:14px;color:#5b21b6;">📜 Print Certificate of Membership</h3>
+      <p style="font-size:12px;color:#6b7280;">Tick the box next to one or more homeowners below, then generate.</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:12px;color:#6b7280;">${state.certSelected.length} selected</span>
+      ${state.certSelected.length>0?`<button id="cert-clear-btn" style="font-size:12px;color:#7c3aed;background:none;border:none;cursor:pointer;">Clear</button>`:''}
+      <button id="print-certificate-btn" style="font-size:13px;color:#fff;border:none;cursor:pointer;padding:8px 14px;border-radius:8px;font-weight:600;background:#7c3aed;">🖨️ Print Certificate</button>
+    </div>
+  </div>
   <div class="card" style="overflow-x:auto;">
   <table><thead><tr>
+    <th class="no-print" style="width:30px;"><input type="checkbox" id="cert-select-all"></th>
     <th><button data-sort="name" style="background:none;border:none;cursor:pointer;font-weight:600;display:flex;align-items:center;">Name${arr('name')}</button></th>
     <th><button data-sort="block" style="background:none;border:none;cursor:pointer;font-weight:600;display:flex;align-items:center;">Block${arr('block')}</button></th>
     <th>Lot</th><th>Area</th><th>Email</th><th>Status</th><th>Dues</th><th class="no-print">Actions</th>
   </tr></thead><tbody>
   ${rows.map(h=>`<tr>
+    <td class="no-print"><input type="checkbox" class="cert-select-row" data-cert-id="${h.id}" ${state.certSelected.includes(h.id)?'checked':''}></td>
     <td>${esc(h.name)}</td><td>${esc(h.block||'')}</td><td>${esc(h.lot||'')}</td><td>${esc(h.area||'')}</td><td>${esc(h.email||'')}</td>
     <td><span style="font-size:11px;padding:2px 8px;border-radius:20px;${h.status==='active'?'background:#d1fae5;color:#065f46;':'background:#f1f5f9;color:#64748b;'}">${h.status}</span></td>
     <td>${isDuesUpdated(h.id)?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#d1fae5;color:#065f46;">✅ Updated</span>`:`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#fee2e2;color:#991b1b;">⚠️ Update</span>`}</td>
     <td class="no-print" style="white-space:nowrap;">
       <button data-print-homeowner="${h.id}" style="font-size:12px;color:#2563eb;background:none;border:none;cursor:pointer;margin-right:6px;">Statement</button>
+      <button data-print-cert="${h.id}" style="font-size:12px;color:#7c3aed;background:none;border:none;cursor:pointer;margin-right:6px;">Certificate</button>
       ${isSuper?`<button data-edit-homeowner="${h.id}" style="font-size:12px;color:#64748b;background:none;border:none;cursor:pointer;margin-right:6px;">Edit</button><button data-delete-homeowner="${h.id}" style="font-size:12px;color:#ef4444;background:none;border:none;cursor:pointer;">Delete</button>`:''}
     </td>
-  </tr>`).join('')||`<tr><td colspan="8" style="text-align:center;color:#94a3b8;">No homeowners yet</td></tr>`}
+  </tr>`).join('')||`<tr><td colspan="9" style="text-align:center;color:#94a3b8;">No homeowners yet</td></tr>`}
   </tbody></table></div>
   ${renderHomeownerModal()}
   <div id="masterlist-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:50;align-items:center;justify-content:center;" class="no-print">
@@ -775,6 +790,30 @@ function attachHandlers(){
   document.querySelectorAll('[data-edit-homeowner]').forEach(b=>b.onclick=()=>openHoModal(state.homeowners.find(h=>h.id===b.dataset.editHomeowner)));
   document.querySelectorAll('[data-delete-homeowner]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this homeowner?'))return;const{error}=await sb.from('homeowners').delete().eq('id',b.dataset.deleteHomeowner);if(error)return toast(error.message,true);toast('Homeowner deleted');await loadAllData();render();});
   document.querySelectorAll('[data-print-homeowner]').forEach(b=>b.onclick=()=>printStatement(b.dataset.printHomeowner));
+  // certificate: per-row quick print
+  document.querySelectorAll('[data-print-cert]').forEach(b=>b.onclick=()=>printCertificates([b.dataset.printCert]));
+  // certificate: row checkboxes
+  document.querySelectorAll('.cert-select-row').forEach(cb=>cb.onchange=()=>{
+    const id=cb.dataset.certId;
+    const upd=cb.checked?[...state.certSelected,id]:state.certSelected.filter(x=>x!==id);
+    setState({certSelected:upd});
+  });
+  // certificate: select-all
+  const csa=document.getElementById('cert-select-all');
+  if(csa)csa.onchange=()=>{
+    const visibleIds=Array.from(document.querySelectorAll('.cert-select-row')).map(cb=>cb.dataset.certId);
+    if(csa.checked){const upd=[...new Set([...state.certSelected,...visibleIds])];setState({certSelected:upd});}
+    else{const upd=state.certSelected.filter(id=>!visibleIds.includes(id));setState({certSelected:upd});}
+  };
+  // certificate: clear selection
+  const ccl=document.getElementById('cert-clear-btn');
+  if(ccl)ccl.onclick=()=>setState({certSelected:[]});
+  // certificate: print selected
+  const pcb=document.getElementById('print-certificate-btn');
+  if(pcb)pcb.onclick=()=>{
+    if(state.certSelected.length===0){toast('Tick at least one homeowner first.',true);return;}
+    printCertificates(state.certSelected);
+  };
   const hoc=document.getElementById('ho-cancel');
   if(hoc)hoc.onclick=()=>hideModal('homeowner-modal');
   const hof=document.getElementById('homeowner-form');
@@ -1065,6 +1104,59 @@ function printDuesGrid(){
   <div class="legend"><span><span class="swatch" style="background:#dcfce7;"></span>Fully Paid</span><span><span class="swatch" style="background:#fef9c3;"></span>Partial</span><span><span class="swatch" style="background:#fff5f5;"></span>None</span></div>
   <p style="font-size:10px;color:#94a3b8;margin-top:16px;">Generated ${fmtDate(new Date())}</p>
   </body></html>`);
+  w.document.close();setTimeout(()=>w.print(),300);
+}
+
+// CERTIFICATE OF MEMBERSHIP
+function printCertificates(ids){
+  const members=state.homeowners.filter(h=>ids.includes(h.id));
+  if(members.length===0){toast('No matching homeowner(s) found.',true);return;}
+  const todayLong=new Date().toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'});
+  const dayNum=new Date().getDate();
+  const dayOrdinal=n=>{const s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);};
+  const monthYear=new Date().toLocaleDateString('en-PH',{year:'numeric',month:'long'});
+  const pages=members.map(ho=>{
+    const address=`Blk. ${esc(ho.block||'-')} Lot ${esc(ho.lot||'-')}, Maagay 1, Brgy. Inarawan, Antipolo City`;
+    return`<div class="cert-page">
+      <div class="cert-header">
+        <div class="cert-logo">🏡</div>
+        <div class="cert-header-text">
+          <p style="font-weight:700;">MAAGAY 1 HOMEOWNERS ASSOCIATION, INC., PHASE 1-B</p>
+          <p>Sitio Maagay 1, Brgy. Inarawan, Antipolo City</p>
+          <p>TIN No. 222-656-162-000</p>
+          <p>HLURB Reg No. 01415</p>
+        </div>
+      </div>
+      <h2 class="cert-title">CERTIFICATE OF MEMBERSHIP</h2>
+      <p class="cert-date">${todayLong}</p>
+      <p class="cert-para">To Whom It May Concern:</p>
+      <p class="cert-para">This is to certify that <b>${esc(ho.name)}</b> residing at <b>${address}</b> is a recognized member of the Maagay 1 Homeowners Association Inc. - Phase 1-B.</p>
+      <p class="cert-para">This certification is issued upon the request of ${esc(ho.name)} for whatever legal purpose it may serve.</p>
+      <p class="cert-para">Issued this ${dayOrdinal(dayNum)} day of ${monthYear}</p>
+      <p class="cert-para" style="margin-top:30px;">Sincerely,</p>
+      <div class="cert-sig">
+        <p class="cert-sig-line">________________________</p>
+        <p style="font-weight:700;">LANIE V. LIBRADILLA</p>
+        <p>President</p>
+        <p>Maagay1 Homeowners Assn, Inc. Ph.1B</p>
+      </div>
+    </div>`;
+  }).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>Certificate of Membership</title><style>
+    body{font-family:Arial,sans-serif;color:#1e293b;margin:0;}
+    .cert-page{padding:50px 60px;page-break-after:always;}
+    .cert-page:last-child{page-break-after:auto;}
+    .cert-header{display:flex;align-items:center;gap:16px;justify-content:center;margin-bottom:26px;}
+    .cert-logo{width:60px;height:60px;border-radius:50%;background:#fef9c3;border:2px solid #ca8a04;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;}
+    .cert-header-text{text-align:center;font-size:12px;line-height:1.5;}
+    .cert-title{text-align:center;font-size:16px;letter-spacing:1px;margin:26px 0;}
+    .cert-date{margin-bottom:24px;font-size:13px;}
+    .cert-para{font-size:13px;line-height:1.9;margin-bottom:18px;}
+    .cert-sig{margin-top:10px;font-size:13px;line-height:1.6;}
+    .cert-sig-line{margin-bottom:4px;}
+    @media print{.cert-page{padding:40px 60px;}}
+  </style></head><body>${pages}</body></html>`);
   w.document.close();setTimeout(()=>w.print(),300);
 }
 
