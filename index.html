@@ -54,6 +54,7 @@ let state={
   duesAnnualTarget:900,mobileSidebarOpen:false,
   certSelected:[],duesGridCollapsed:false,
   monthlyAmortYear:new Date().getFullYear(),monthlyAmortCollapsed:false,
+  emailStmtSearch:'',emailStmtSelectedMembers:[],emailStmtSelectedTypes:[],
 };
 
 const root=document.getElementById('app');
@@ -586,11 +587,11 @@ function renderDuesGrid(years){
   const cs=paid=>paid<=0?'background:#fff5f5;':paid>=target?'background:#dcfce7;color:#166534;':'background:#fef9c3;color:#854d0e;';
   const fmt=paid=>paid>0?Number(paid).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
   const collapsed=state.duesGridCollapsed;
-  return`<div class="card" style="margin-bottom:16px;" id="dues-grid-area">
+  return`<div class="card" style="margin-bottom:16px;border-left:4px solid #10b981;" id="dues-grid-area">
   <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;${collapsed?'':'margin-bottom:12px;'}" class="no-print">
     <div id="dues-grid-toggle" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 8px;margin:-4px -8px;border-radius:8px;" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='transparent'">
       <span style="font-size:16px;color:#059669;font-weight:700;transition:transform 0.15s;transform:rotate(${collapsed?'-90deg':'0deg'});display:inline-block;">▾</span>
-      <div><h3 style="font-weight:600;font-size:14px;">🗓️ Monthly Dues — Yearly Collection Grid <span style="font-size:10px;font-weight:400;color:#94a3b8;">(click to ${collapsed?'expand':'collapse'})</span></h3><p style="font-size:11px;color:#64748b;">🟢 Fully paid &nbsp;🟡 Partial &nbsp;🔴 None</p></div>
+      <div><h3 style="font-weight:600;font-size:14px;color:#065f46;">🟢 Monthly Dues — Yearly Collection Grid <span style="font-size:10px;font-weight:400;color:#94a3b8;">(click to ${collapsed?'expand':'collapse'})</span></h3><p style="font-size:11px;color:#64748b;">🟢 Fully paid &nbsp;🟡 Partial &nbsp;🔴 None</p></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <label style="font-size:11px;font-weight:600;color:#64748b;">Full year (₱):</label>
@@ -622,14 +623,14 @@ function renderMonthlyAmortization(years){
   const target=state.duesAnnualTarget;
   const monthlyRate=target/12;
   const yr=state.monthlyAmortYear;
-  const duesType=state.paymentTypes.find(t=>(t.name||'').toLowerCase().includes('monthly dues'));
+  const amortType=state.paymentTypes.find(t=>(t.name||'').toLowerCase().includes('monthly amortization'));
   const active=state.homeowners.filter(h=>h.status==='active').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const totals={};
   active.forEach(h=>{totals[h.id]=new Array(12).fill(0);});
   state.payments.forEach(p=>{
     if(p.is_voided)return;
-    if(duesType&&p.payment_type_id!==duesType.id)return;
-    if(!duesType&&!(p.payment_types?.name||'').toLowerCase().includes('monthly dues'))return;
+    if(amortType&&p.payment_type_id!==amortType.id)return;
+    if(!amortType&&!(p.payment_types?.name||'').toLowerCase().includes('monthly amortization'))return;
     if(!totals[p.homeowner_id])return;
     const alloc=allocateDuesByMonth(p,monthlyRate);
     Object.entries(alloc).forEach(([key,amt])=>{
@@ -641,25 +642,25 @@ function renderMonthlyAmortization(years){
   const fmt=paid=>paid>0?Number(paid).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
   const collapsed=state.monthlyAmortCollapsed;
   const yearOptions=[...new Set([...years,yr])].sort((a,b)=>b-a);
-  return`<div class="card" style="margin-bottom:16px;" id="monthly-amort-area">
+  return`<div class="card" style="margin-bottom:16px;border-left:4px solid #2563eb;" id="monthly-amort-area">
   <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;${collapsed?'':'margin-bottom:12px;'}" class="no-print">
-    <div id="monthly-amort-toggle" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 8px;margin:-4px -8px;border-radius:8px;" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='transparent'">
-      <span style="font-size:16px;color:#059669;font-weight:700;transition:transform 0.15s;transform:rotate(${collapsed?'-90deg':'0deg'});display:inline-block;">▾</span>
-      <div><h3 style="font-weight:600;font-size:14px;">🗓️ Monthly Amortization <span style="font-size:10px;font-weight:400;color:#94a3b8;">(click to ${collapsed?'expand':'collapse'})</span></h3><p style="font-size:11px;color:#64748b;">🟢 Fully paid &nbsp;🟡 Partial &nbsp;🔴 None &nbsp;·&nbsp; Per month = ${peso(monthlyRate)}</p></div>
+    <div id="monthly-amort-toggle" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 8px;margin:-4px -8px;border-radius:8px;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:16px;color:#2563eb;font-weight:700;transition:transform 0.15s;transform:rotate(${collapsed?'-90deg':'0deg'});display:inline-block;">▾</span>
+      <div><h3 style="font-weight:600;font-size:14px;color:#1e40af;">🔵 Monthly Amortization <span style="font-size:10px;font-weight:400;color:#94a3b8;">(click to ${collapsed?'expand':'collapse'})</span></h3><p style="font-size:11px;color:#64748b;">🟢 Fully paid &nbsp;🟡 Partial &nbsp;🔴 None &nbsp;·&nbsp; Per month = ${peso(monthlyRate)}</p></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;" class="no-print">
       <label style="font-size:11px;font-weight:600;color:#64748b;">Year:</label>
-      <select id="monthly-amort-year-select" style="border:1px solid #d1fae5;border-radius:6px;padding:6px 8px;font-size:13px;">${yearOptions.map(y=>`<option value="${y}" ${y===yr?'selected':''}>${y}</option>`).join('')}</select>
-      <button id="print-monthly-amort" style="font-size:13px;background:#d1fae5;color:#064e3b;border:none;cursor:pointer;padding:7px 12px;border-radius:8px;">🖨️ Print</button>
+      <select id="monthly-amort-year-select" style="border:1px solid #bfdbfe;border-radius:6px;padding:6px 8px;font-size:13px;">${yearOptions.map(y=>`<option value="${y}" ${y===yr?'selected':''}>${y}</option>`).join('')}</select>
+      <button id="print-monthly-amort" style="font-size:13px;background:#dbeafe;color:#1d4ed8;border:none;cursor:pointer;padding:7px 12px;border-radius:8px;">🖨️ Print</button>
     </div>
   </div>
   ${collapsed?'':`<div style="overflow-x:auto;max-height:420px;overflow-y:auto;">
   <table style="font-size:11px;">
     <thead style="position:sticky;top:0;z-index:2;">
       <tr>
-        <th style="position:sticky;left:0;z-index:3;background:#f0fdf4;white-space:nowrap;">Name</th>
-        <th style="background:#f0fdf4;">Blk/Lot</th>
-        ${mNames.map(m=>`<th style="background:#f0fdf4;text-align:center;">${m}</th>`).join('')}
+        <th style="position:sticky;left:0;z-index:3;background:#eff6ff;white-space:nowrap;">Name</th>
+        <th style="background:#eff6ff;">Blk/Lot</th>
+        ${mNames.map(m=>`<th style="background:#eff6ff;text-align:center;">${m}</th>`).join('')}
       </tr>
     </thead>
     <tbody>${active.map(h=>`<tr>
@@ -723,27 +724,23 @@ function renderReportSections(){
   return`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:16px;">
   <div class="card">
     <h3 style="font-weight:600;font-size:14px;margin-bottom:4px;">👤 Member Statement(s)</h3>
-    <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Print full payment history for chosen homeowners.</p>
+    <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Search &amp; select homeowner(s), then optionally tick specific payment types to include (leave all unchecked to include everything).</p>
     <div style="position:relative;margin-bottom:8px;">
       <input type="text" id="report-member-search" placeholder="Search by name..." value="${esc(state.reportMemberSearch)}" style="width:100%;border:1px solid #ddd8fe;border-radius:8px;padding:8px;font-size:13px;box-sizing:border-box;">
       <div id="report-member-results" style="display:none;position:absolute;z-index:10;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);margin-top:4px;width:100%;max-height:160px;overflow-y:auto;"></div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">${state.reportSelectedMembers.map(id=>{const h=state.homeowners.find(x=>x.id===id);return h?`<span style="font-size:11px;background:#ede9fe;color:#6d28d9;padding:4px 8px;border-radius:20px;display:flex;align-items:center;gap:4px;">${esc(h.name)}<button data-remove-report-member="${id}" style="background:none;border:none;cursor:pointer;color:#6d28d9;font-weight:700;font-size:13px;line-height:1;">×</button></span>`:''}).join('')||`<span style="font-size:11px;color:#94a3b8;">No members selected</span>`}</div>
-    <button id="print-member-statements" style="width:100%;padding:9px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Print Selected</button>
-  </div>
-  <div class="card">
-    <h3 style="font-weight:600;font-size:14px;margin-bottom:4px;">💵 By Payment Type</h3>
-    <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Print all records for chosen payment types.</p>
-    <div style="max-height:140px;overflow-y:auto;border:1px solid #fde68a;border-radius:8px;padding:8px;margin-bottom:10px;">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">${state.reportSelectedMembers.map(id=>{const h=state.homeowners.find(x=>x.id===id);return h?`<span style="font-size:11px;background:#ede9fe;color:#6d28d9;padding:4px 8px;border-radius:20px;display:flex;align-items:center;gap:4px;">${esc(h.name)}<button data-remove-report-member="${id}" style="background:none;border:none;cursor:pointer;color:#6d28d9;font-weight:700;font-size:13px;line-height:1;">×</button></span>`:''}).join('')||`<span style="font-size:11px;color:#94a3b8;">No members selected</span>`}</div>
+    <p style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:6px;">Filter by Payment Type (optional):</p>
+    <div style="max-height:140px;overflow-y:auto;border:1px solid #ddd8fe;border-radius:8px;padding:8px;margin-bottom:12px;">
       ${state.paymentTypes.map(t=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;"><input type="checkbox" data-report-type-checkbox="${t.id}" ${state.reportSelectedTypes.includes(t.id)?'checked':''}>${esc(t.name)}</label>`).join('')}
     </div>
-    <button id="print-type-report" style="width:100%;padding:9px;background:#d97706;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Print Selected Types</button>
-  </div></div>
+    <button id="print-member-statements" style="width:100%;padding:9px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Print Selected</button>
+  </div>
   <div class="card">
     <h3 style="font-weight:600;font-size:14px;margin-bottom:4px;">📋 Payment Ranking — Who's Paying, Who's Not</h3>
     <p style="font-size:12px;color:#64748b;margin-bottom:12px;">Every homeowner ranked highest to lowest paid per payment type.</p>
     <button id="print-ranking-report" style="padding:9px 20px;background:#e11d48;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">🖨️ Print Ranking Report</button>
-  </div>`;
+  </div></div>`;
 }
 
 // EMAIL
@@ -768,6 +765,20 @@ function renderEmail(){
       <div style="margin-bottom:16px;"><label style="font-size:11px;font-weight:600;color:#64748b;">Message *</label><textarea required id="email-body" rows="8" placeholder="Message" style="width:100%;border:1px solid #a5f3fc;border-radius:8px;padding:8px;font-size:13px;box-sizing:border-box;margin-top:4px;resize:vertical;"></textarea></div>
       <button type="submit" style="width:100%;padding:11px;background:#0891b2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;">📤 Open in Gmail</button>
     </form>
+  </div>
+  <div class="card" style="max-width:640px;margin-top:16px;">
+    <h3 style="font-weight:600;font-size:14px;margin-bottom:4px;">📧 Email Payment Statement</h3>
+    <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Search &amp; select homeowner(s), tick specific payment types (optional), then send each a personalized statement in Tagalog with the Association letterhead and a link to check their account online.</p>
+    <div style="position:relative;margin-bottom:8px;">
+      <input type="text" id="email-stmt-member-search" placeholder="Search by name..." value="${esc(state.emailStmtSearch)}" style="width:100%;border:1px solid #a5f3fc;border-radius:8px;padding:8px;font-size:13px;box-sizing:border-box;">
+      <div id="email-stmt-member-results" style="display:none;position:absolute;z-index:10;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);margin-top:4px;width:100%;max-height:160px;overflow-y:auto;"></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">${state.emailStmtSelectedMembers.map(id=>{const h=state.homeowners.find(x=>x.id===id);return h?`<span style="font-size:11px;background:${h.email?'#cffafe':'#fee2e2'};color:${h.email?'#0e7490':'#991b1b'};padding:4px 8px;border-radius:20px;display:flex;align-items:center;gap:4px;">${esc(h.name)}${h.email?'':' (no email)'}<button data-remove-email-stmt-member="${id}" style="background:none;border:none;cursor:pointer;color:inherit;font-weight:700;font-size:13px;line-height:1;">×</button></span>`:''}).join('')||`<span style="font-size:11px;color:#94a3b8;">No members selected</span>`}</div>
+    <p style="font-size:11px;font-weight:600;color:#64748b;margin-bottom:6px;">Filter by Payment Type (optional):</p>
+    <div style="max-height:140px;overflow-y:auto;border:1px solid #a5f3fc;border-radius:8px;padding:8px;margin-bottom:12px;">
+      ${state.paymentTypes.map(t=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;"><input type="checkbox" data-email-stmt-type-checkbox="${t.id}" ${state.emailStmtSelectedTypes.includes(t.id)?'checked':''}>${esc(t.name)}</label>`).join('')}
+    </div>
+    <button id="send-statement-email" style="width:100%;padding:9px;background:#0891b2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">📤 Send Statement Email</button>
   </div>`;
 }
 
@@ -1008,11 +1019,20 @@ function attachHandlers(){
   document.querySelectorAll('[data-remove-report-member]').forEach(b=>b.onclick=()=>setState({reportSelectedMembers:state.reportSelectedMembers.filter(id=>id!==b.dataset.removeReportMember)}));
   document.querySelectorAll('[data-report-type-checkbox]').forEach(cb=>cb.onchange=()=>{const id=cb.dataset.reportTypeCheckbox;const upd=cb.checked?[...state.reportSelectedTypes,id]:state.reportSelectedTypes.filter(x=>x!==id);setState({reportSelectedTypes:upd});});
   const pms=document.getElementById('print-member-statements');if(pms)pms.onclick=()=>{if(state.reportSelectedMembers.length===0){toast('Select at least one member.',true);return;}printMemberStatements(state.reportSelectedMembers);};
-  const ptr=document.getElementById('print-type-report');if(ptr)ptr.onclick=()=>{if(state.reportSelectedTypes.length===0){toast('Select at least one type.',true);return;}printTypeReport(state.reportSelectedTypes);};
   const prr=document.getElementById('print-ranking-report');if(prr)prr.onclick=()=>printRankingReport();
   // email
   const ef2=document.getElementById('email-form');
   if(ef2)ef2.onsubmit=e=>{e.preventDefault();const rm=document.getElementById('email-recipients').value,sub=document.getElementById('email-subject').value.trim(),body=document.getElementById('email-body').value.trim();const rcpts=state.homeowners.filter(h=>(rm==='everyone'||h.status==='active')&&h.email).map(h=>h.email);if(rcpts.length===0){toast('No recipients with email on file.',true);return;}const BS=40;const batches=[];for(let i=0;i<rcpts.length;i+=BS)batches.push(rcpts.slice(i,i+BS));batches.forEach((b,i)=>{setTimeout(()=>window.open(`mailto:?bcc=${encodeURIComponent(b.join(','))}&subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`, '_blank'),i*400);});toast(batches.length>1?`Opening ${batches.length} Gmail windows (${rcpts.length} recipients).`:`Opening Gmail with ${rcpts.length} recipient(s) BCC'd.`);};
+  // email statement — member search
+  const esms=document.getElementById('email-stmt-member-search');
+  if(esms){
+    const rb=document.getElementById('email-stmt-member-results');
+    esms.oninput=()=>{const c=esms.selectionStart;const q=esms.value.trim().toLowerCase();setState({emailStmtSearch:esms.value});const r2=document.getElementById('email-stmt-member-search');if(r2){r2.focus();r2.setSelectionRange(c,c);}const rb2=document.getElementById('email-stmt-member-results');if(!rb2)return;if(!q){rb2.style.display='none';return;}const m=state.homeowners.filter(h=>(h.name||'').toLowerCase().includes(q)&&!state.emailStmtSelectedMembers.includes(h.id)).slice(0,15);rb2.innerHTML=m.map(h=>`<button type="button" data-add-email-stmt-member="${h.id}" style="width:100%;text-align:left;padding:8px 12px;font-size:13px;background:none;border:none;cursor:pointer;border-bottom:1px solid #f1f5f9;">${esc(h.name)}${h.email?'':' <span style="color:#ef4444;font-size:11px;">(no email)</span>'}</button>`).join('')||`<div style="padding:8px 12px;font-size:13px;color:#94a3b8;">No matches</div>`;rb2.querySelectorAll('[data-add-email-stmt-member]').forEach(btn=>{btn.onclick=()=>{setState({emailStmtSelectedMembers:[...state.emailStmtSelectedMembers,btn.dataset.addEmailStmtMember],emailStmtSearch:''});};});rb2.style.display='block';};
+  }
+  document.querySelectorAll('[data-remove-email-stmt-member]').forEach(b=>b.onclick=()=>setState({emailStmtSelectedMembers:state.emailStmtSelectedMembers.filter(id=>id!==b.dataset.removeEmailStmtMember)}));
+  document.querySelectorAll('[data-email-stmt-type-checkbox]').forEach(cb=>cb.onchange=()=>{const id=cb.dataset.emailStmtTypeCheckbox;const upd=cb.checked?[...state.emailStmtSelectedTypes,id]:state.emailStmtSelectedTypes.filter(x=>x!==id);setState({emailStmtSelectedTypes:upd});});
+  const sse=document.getElementById('send-statement-email');
+  if(sse)sse.onclick=()=>{if(state.emailStmtSelectedMembers.length===0){toast('Select at least one homeowner.',true);return;}sendStatementEmails(state.emailStmtSelectedMembers,state.emailStmtSelectedTypes);};
   // creds modal
   const ccan=document.getElementById('creds-cancel');if(ccan)ccan.onclick=()=>hideModal('creds-modal');
   const cform=document.getElementById('creds-form');
@@ -1142,24 +1162,55 @@ function printExpenses(period){
 }
 function printMemberStatements(ids){
   const members=state.homeowners.filter(h=>ids.includes(h.id));
-  const sections=members.map(ho=>{const pays=state.payments.filter(p=>p.homeowner_id===ho.id);const total=pays.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);return`<div style="margin-bottom:30px;"><p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')}</p><table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':p.is_waived?' (WAIVED — excluded from total)':''}</td></tr>`).join('')||`<tr><td colspan="6">No payments.</td></tr>`}</tbody></table><p style="font-weight:bold;">Total: ${peso(total)}</p></div>`;}).join('<hr>');
+  const typeIds=state.reportSelectedTypes;
+  const typeNames=state.paymentTypes.filter(t=>typeIds.includes(t.id)).map(t=>t.name);
+  const filterLabel=typeNames.length>0?`Filtered to: ${typeNames.join(', ')}`:'All payment types';
+  const sections=members.map(ho=>{const pays=state.payments.filter(p=>p.homeowner_id===ho.id&&(typeIds.length===0||typeIds.includes(p.payment_type_id)));const total=pays.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);return`<div style="margin-bottom:30px;"><p><b>${esc(ho.name)}</b><br>Block ${esc(ho.block||'-')}, Lot ${esc(ho.lot||'-')}</p><table><thead><tr><th>Date</th><th>OR #</th><th>Type</th><th>Period</th><th>Amount</th><th>Remarks</th></tr></thead><tbody>${pays.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.or_number)}</td><td>${esc(p.payment_types?.name||'')}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td><td>${esc(p.remarks||'')}${p.is_voided?' (VOIDED)':p.is_waived?' (WAIVED — excluded from total)':''}</td></tr>`).join('')||`<tr><td colspan="6">No payments.</td></tr>`}</tbody></table><p style="font-weight:bold;">Total: ${peso(total)}</p></div>`;}).join('<hr>');
   const w=window.open('','_blank');
-  w.document.write(`<html><head><title>Statements</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #cbd5e1;padding:6px;font-size:12px;}th{background:#f1f5f9;}</style></head><body><h2>Maagay 1 Phase 1-B HOA — Member Statements</h2>${sections}<p style="font-size:10px;color:#94a3b8;">Generated ${fmtDate(new Date())}</p></body></html>`);
+  w.document.write(`<html><head><title>Statements</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #cbd5e1;padding:6px;font-size:12px;}th{background:#f1f5f9;}</style></head><body><h2>Maagay 1 Phase 1-B HOA — Member Statements</h2><p style="font-size:11px;color:#64748b;">${filterLabel}</p>${sections}<p style="font-size:10px;color:#94a3b8;">Generated ${fmtDate(new Date())}</p></body></html>`);
   w.document.close();setTimeout(()=>w.print(),300);
 }
-function printTypeReport(ids){
-  const types=state.paymentTypes.filter(t=>ids.includes(t.id));
-  const rows=state.payments.filter(p=>ids.includes(p.payment_type_id)).sort((a,b)=>new Date(b.payment_date)-new Date(a.payment_date));
-  const total=rows.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>Type Report</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;}table{width:100%;border-collapse:collapse;margin-top:14px;}th,td{border:1px solid #cbd5e1;padding:7px;font-size:12px;}th{background:#f1f5f9;}</style></head><body>
-  <h2>Maagay 1 Phase 1-B HOA</h2><h3>Payment Report — ${types.map(t=>t.name).join(', ')}</h3>
-  <table><thead><tr><th>Date</th><th>Homeowner</th><th>Blk/Lot</th><th>OR #</th><th>Period</th><th>Amount</th></tr></thead>
-  <tbody>${rows.map(p=>`<tr><td>${fmtDate(p.payment_date)}</td><td>${esc(p.homeowners?.name||'')}</td><td>${esc(p.homeowners?.block||'')}/${esc(p.homeowners?.lot||'')}</td><td>${esc(p.or_number)}</td><td>${fmtPeriod(p)||'—'}</td><td>${peso(p.amount)}</td></tr>`).join('')||`<tr><td colspan="6" style="text-align:center;">No payments.</td></tr>`}</tbody></table>
-  <p style="margin-top:12px;font-weight:bold;">Total: ${peso(total)}</p>
-  <p style="font-size:10px;color:#94a3b8;margin-top:20px;">Generated ${fmtDate(new Date())}</p></body></html>`);
-  w.document.close();setTimeout(()=>w.print(),300);
+
+// EMAIL PAYMENT STATEMENT (Tagalog, per-homeowner, individualized)
+function sendStatementEmails(memberIds,typeIds){
+  const members=state.homeowners.filter(h=>memberIds.includes(h.id));
+  const withEmail=members.filter(h=>h.email);
+  const withoutEmail=members.filter(h=>!h.email);
+  if(withEmail.length===0){toast('None of the selected homeowners have an email on file.',true);return;}
+  const typeNames=state.paymentTypes.filter(t=>typeIds.includes(t.id)).map(t=>t.name);
+  const typeLabel=typeNames.length>0?`"${typeNames.join(', ')}"`:'lahat ng bayad';
+  const loginUrl=window.location.origin+window.location.pathname+'?login=member';
+  withEmail.forEach((ho,i)=>{
+    const pays=state.payments.filter(p=>p.homeowner_id===ho.id&&(typeIds.length===0||typeIds.includes(p.payment_type_id)));
+    const total=pays.filter(isValidIncome).reduce((s,p)=>s+Number(p.amount),0);
+    const listLines=pays.length>0?pays.map(p=>`- ${fmtDate(p.payment_date)} | OR#${p.or_number} | ${p.payment_types?.name||''} | ${fmtPeriod(p)||'—'} | ${peso(p.amount)}${p.is_voided?' (VOIDED)':p.is_waived?' (WAIVED)':''}`).join('\n'):'(Wala pang naitalang bayad sa ilalim ng napiling kategorya.)';
+    const body=`MAAGAY 1 HOMEOWNERS ASSOCIATION, INC., PHASE 1-B
+Sitio Maagay 1, Brgy. Inarawan, Antipolo City
+TIN No. 222-656-162-000 | HLURB Reg No. 01415
+
+Mahal na ${ho.name},
+
+Narito po ang listahan ng inyong ${typeLabel} na bayad:
+
+${listLines}
+
+Kabuuang Bayad: ${peso(total)}
+
+Kung may katanungan o clarification po kayo, maaari po kayong mag-reply sa email na ito.
+
+Maaari niyo ring tingnan online ang inyong buong listahan ng bayad sa pamamagitan ng link sa ibaba:
+${loginUrl}
+(I-type lang po ang inyong email address na nakarehistro sa amin upang makapasok.)
+
+Maraming salamat po.
+
+Lubos na gumagalang,
+Maagay 1 Homeowners Association Inc. - Phase 1-B`;
+    setTimeout(()=>window.open(`mailto:${encodeURIComponent(ho.email)}?subject=${encodeURIComponent('Listahan ng Bayad - Maagay 1 HOA')}&body=${encodeURIComponent(body)}`,'_blank'),i*500);
+  });
+  toast(`Opening ${withEmail.length} email${withEmail.length>1?'s':''}${withoutEmail.length>0?` (${withoutEmail.length} skipped — no email on file)`:''}.`);
 }
+
 function printRankingReport(){
   const active=state.homeowners.filter(h=>h.status==='active');
   const sections=state.paymentTypes.map(t=>{const ranked=active.map(h=>({name:h.name,block:h.block,lot:h.lot,total:state.payments.filter(p=>p.homeowner_id===h.id&&p.payment_type_id===t.id&&!p.is_voided&&!p.is_waived).reduce((s,p)=>s+Number(p.amount),0),waived:state.payments.some(p=>p.homeowner_id===h.id&&p.payment_type_id===t.id&&!p.is_voided&&p.is_waived)})).sort((a,b)=>b.total-a.total);    return`<h3 style="margin-top:20px;font-size:13px;">${esc(t.name)}</h3><table><thead><tr><th>#</th><th>Homeowner</th><th>Blk/Lot</th><th>Total Paid (Cash)</th><th>Notes</th></tr></thead><tbody>${ranked.map((r,i)=>`<tr style="${r.total===0&&!r.waived?'color:#dc2626;':''}"><td>${i+1}</td><td>${esc(r.name)}</td><td>${esc(r.block||'')}/${esc(r.lot||'')}</td><td>${r.total===0&&!r.waived?'NO PAYMENT':peso(r.total)}</td><td>${r.waived?'<span style="font-size:10px;background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:10px;">WAIVED</span>':''}</td></tr>`).join('')}</tbody></table>`;}).join('');
@@ -1205,13 +1256,13 @@ function printMonthlyAmort(){
   const mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const target=state.duesAnnualTarget;const mr=target/12;
   const yr=state.monthlyAmortYear;
-  const duesType=state.paymentTypes.find(t=>(t.name||'').toLowerCase().includes('monthly dues'));
+  const amortType=state.paymentTypes.find(t=>(t.name||'').toLowerCase().includes('monthly amortization'));
   const active=state.homeowners.filter(h=>h.status==='active').sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const totals={};active.forEach(h=>{totals[h.id]=new Array(12).fill(0);});
   state.payments.forEach(p=>{
     if(p.is_voided)return;
-    if(duesType&&p.payment_type_id!==duesType.id)return;
-    if(!duesType&&!(p.payment_types?.name||'').toLowerCase().includes('monthly dues'))return;
+    if(amortType&&p.payment_type_id!==amortType.id)return;
+    if(!amortType&&!(p.payment_types?.name||'').toLowerCase().includes('monthly amortization'))return;
     if(!totals[p.homeowner_id])return;
     const al=allocateDuesByMonth(p,mr);
     Object.entries(al).forEach(([key,a])=>{const[y,m]=key.split('-').map(Number);if(y===yr)totals[p.homeowner_id][m]+=a;});
@@ -1288,6 +1339,7 @@ function printCertificates(ids){
 }
 
 // INIT
+if(new URLSearchParams(window.location.search).get('login')==='member'){state.loginMode='member';}
 render();
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}
 </script>
